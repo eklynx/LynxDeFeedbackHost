@@ -61,6 +61,7 @@ Plugin Error states:
 
 ## Donations Accepted:
 As I am currently an unemployed software engineer I have not been able to afford buying a license to the DeFeedback Plugin.  All testing has been performed using the trial version.    If you find this project useful or at least promising, I do encourage you to donate!  Donations will be used to first purchase three copies of the DeFeedback plugin, one for my main development box, the others for my live sound rig for active usage/testing of this app, as well as a backup for my laptop, because any live sound engineer needs a backup for anything critical.  After that has been achieved, further donations will go to upgrading my live sound gear that this plugin directly interfaces with such as a new mixer and dante interfaces.
+So if you wish to donate, click on the '[Sponsor](https://github.com/sponsors/eklynx)' button above!
 
 ## Future Features:
 - Stream Deck encoder support - High priority. Med complexity.  The encoder can let you scroll through strength percentages instead of having pre-set buttons.  I want to make sure it doesnt spam the web server so it should wait a little (100ms?) after the last change to the encoder before sending the updated value to the host.  I also need to figure out a good way to actual display the value and instance.
