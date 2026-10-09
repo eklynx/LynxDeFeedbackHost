@@ -32,6 +32,9 @@ struct StreamDeckSettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 440)
+        // Size to the full content height so the Settings window fits it without scrolling.
+        .scrollDisabled(true)
+        .fixedSize(horizontal: false, vertical: true)
         .onAppear(perform: refreshSteamDeckStatus)
     }
 

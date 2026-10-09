@@ -68,6 +68,9 @@ struct ServerSettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 440)
+        // Size to the full content height so the Settings window fits it without scrolling.
+        .scrollDisabled(true)
+        .fixedSize(horizontal: false, vertical: true)
         .task {
             port = String(host.webServerSettings.port)
             password = KeychainPassword.read() ?? ""

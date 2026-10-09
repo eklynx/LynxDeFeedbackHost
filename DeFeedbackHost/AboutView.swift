@@ -80,14 +80,18 @@ struct AboutView: View {
                 Divider()
                     .padding(.vertical, 12)
 
-                Text("The makers of this applicaion are in no way associated with Alpha Labs, LLC or the DeFeedback plugin.  Any mentions or usages of images part of Alpha Labs, LLC and the DeFeedback plugin are used so users can visually identify the purpose.")
+                Text("The makers of this application are in no way associated with Alpha Labs, LLC or the DeFeedback plugin.  Any mentions or usages of images part of Alpha Labs, LLC and the DeFeedback plugin are used so users can visually identify the purpose.")
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.vertical, 12)
 
             }
         }
         .padding(24)
         .textSelection(.enabled)
         .frame(width: 460, alignment: .leading)
+        // Report the full wrapped height so the content-sized window shows everything.
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder

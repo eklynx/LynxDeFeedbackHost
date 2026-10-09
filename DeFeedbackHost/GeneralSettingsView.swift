@@ -14,7 +14,7 @@ struct GeneralSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Auto-run on startup", isOn: $host.autoRunOnStartup)
+                Toggle("Auto-run host on application startup", isOn: $host.autoRunOnStartup)
             } header: {
                 Text("Startup")
             } footer: {
@@ -41,6 +41,9 @@ struct GeneralSettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 440)
+        // Size to the full content height so the Settings window fits it without scrolling.
+        .scrollDisabled(true)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
