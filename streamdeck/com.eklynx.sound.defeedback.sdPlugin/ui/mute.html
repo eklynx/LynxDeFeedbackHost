@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+
+<head lang="en">
+    <title>Mute settings</title>
+    <meta charset="utf-8" />
+    <script src="https://sdpi-components.dev/releases/v4/sdpi-components.js"></script>
+</head>
+
+<body>
+<!--
+    Learn more about property inspector components at https://sdpi-components.dev/docs/components
+-->
+<sdpi-item label="Instance Name">
+    <sdpi-textfield setting="instanceName" default="Vox1" required=true ></sdpi-textfield>
+</sdpi-item>
+
+<sdpi-heading>Plugin Settings</sdpi-heading>
+<sdpi-item label="Host">
+    <sdpi-textfield global setting="hostname" placeholder="localhost"></sdpi-textfield>
+</sdpi-item>
+<sdpi-item label="Port">
+    <sdpi-textfield global setting="port" placeholder="8787"></sdpi-textfield>
+</sdpi-item>
+<sdpi-item label="Username">
+    <sdpi-textfield global setting="username" placeholder="(optional)"></sdpi-textfield>
+</sdpi-item>
+<sdpi-item label="Password">
+    <sdpi-textfield global setting="password" type="password" placeholder="(optional)"></sdpi-textfield>
+</sdpi-item>
+</body>
+
+</html>

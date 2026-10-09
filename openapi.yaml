@@ -1,0 +1,1461 @@
+openapi: 3.1.0
+
+# DeFeedbackHost web control API.
+#
+# Keep this in step with DeFeedbackHost/Web/WebControlService.swift — the route table in
+# `routeEndpoint(_:)` and the field list in `statusPayload()` are the source of truth. Bump
+# `x-protocol-version` and `WebControlService.protocolVersion` together, and only for a breaking
+# change.
+
+info:
+  title: DeFeedback Host Control API
+  version: "1.0.0"
+  x-protocol-version: 1
+  summary: Transport, device, sample rate, buffer size and instance control for a DeFeedbackHost.
+  description: |
+    An HTTP control surface served by the DeFeedbackHost macOS app itself, so the host can be
+    driven from another machine on the same network.
+
+    **Shape of the interface.** Host-wide commands — transport, devices, sample rate, buffer
+    size — are `POST` with a JSON body, and each answers with a fresh status snapshot. Instances
+    are a resource rather than a command: `GET`/`POST` on `/api/instances` and
+    `GET`/`PATCH`/`DELETE` on `/api/instances/{id}`.
+
+    Live status is *not* polled: one Server-Sent Events stream at `/api/events` pushes a `status`
+    event whenever anything changes, and at least every two seconds regardless. `GET /api/status`
+    returns the same object for clients that only want a snapshot, and `GET /api/instances`
+    returns just the instance list for clients that want nothing else.
+
+    Server-Sent Events rather than WebSockets because everything then stays ordinary HTTP/1.1 on a
+    single port, so one authentication check covers every route — `EventSource` cannot send custom
+    headers, which rules out a bearer token without also inventing a cookie and a CSRF defence.
+    The cost is that browser-to-app traffic is request/response only.
+
+    **Security.** There is no TLS. When authentication is enabled, HTTP Basic credentials cross the
+    network base64-encoded and readable by anyone on it. This is a trusted-LAN interface.
+
+    The server's own configuration — port, whether authentication is required, username and
+    password — is deliberately **not** exposed here. It is editable only in the app's native
+    Settings window, so a client that gets in cannot widen its own access or read the password
+    back.
+
+    **Limits.** 32 concurrent connections, 16 KiB of request headers, 64 KiB of request body, and a
+    30 second idle timeout on connections that have not been upgraded to an event stream. Chunked
+    transfer encoding and obsolete header line folding are refused rather than reassembled.
+
+  contact:
+    name: Edgars Klepers
+    email: 3709300+eklynx@users.noreply.github.com
+
+servers:
+  - url: http://{host}:{port}
+    description: The machine running DeFeedbackHost, reachable on the local network.
+    variables:
+      host:
+        default: localhost
+        description: |
+          The host's Bonjour name (for example `studio-mac.local`) or its IP address. The app's
+          Settings window shows the exact URL. The listener binds all interfaces.
+      port:
+        default: "8787"
+        description: The TCP port set in Settings. Defaults to 8787; must be 1024–65535.
+
+security:
+  - {}            # Authentication is off by default.
+  - basicAuth: []
+
+tags:
+  - name: Page
+    description: The bundled control page.
+  - name: Status
+    description: |
+      Reading host state, as a snapshot, as a live stream, or as the instance list on its own.
+  - name: Control
+    description: |
+      Changing host state. Device, sample rate and buffer size changes are refused while the host
+      is running; transport and instance changes are not.
+
+paths:
+
+  /:
+    get:
+      tags: [Page]
+      operationId: getControlPage
+      summary: The control page
+      description: |
+        A self-contained HTML page with no external assets, served from the app bundle. Also
+        available at `/index.html`.
+      responses:
+        "200":
+          description: The page.
+          content:
+            text/html:
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          description: The page is missing from the app bundle.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    head:
+      tags: [Page]
+      operationId: headControlPage
+      summary: Headers for the control page
+      description: Carries the headers a `GET` would, including `Content-Length`, with no body.
+      responses:
+        "200":
+          description: Headers only.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /index.html:
+    get:
+      tags: [Page]
+      operationId: getControlPageByName
+      summary: The control page (alias for `/`)
+      responses:
+        "200":
+          description: The page.
+          content:
+            text/html:
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/status:
+    get:
+      tags: [Status]
+      operationId: getStatus
+      summary: A status snapshot
+      description: |
+        The same object the `status` event carries. Prefer `/api/events` for anything live — this
+        exists for clients that want one reading and no long-lived connection.
+      responses:
+        "200":
+          description: Current host state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Status" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+    head:
+      tags: [Status]
+      operationId: headStatus
+      summary: Headers for a status snapshot
+      responses:
+        "200":
+          description: Headers only.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/events:
+    get:
+      tags: [Status]
+      operationId: streamEvents
+      summary: Live status stream (Server-Sent Events)
+      description: |
+        An event stream that stays open. A `status` event is sent immediately on connect, then
+        whenever the payload changes, and at least every two seconds unchanged — the periodic
+        re-send doubles as the liveness check that notices a peer which vanished without closing.
+
+        The stream opens with a `retry: 1000` line, so a browser's `EventSource` reconnects about a
+        second after a drop with no client-side logic.
+
+        **This response carries no `Content-Length`** and is delimited by connection close, as RFC
+        9112 §6.3 requires of a body whose length is unknowable. Clients must not wait for a
+        content length or queue another request on this connection.
+
+        Each connected stream occupies one of the 32 connection slots. The idle timeout does not
+        apply once a connection has become a stream.
+      responses:
+        "200":
+          description: The event stream.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: "no-store" }
+            Connection:
+              schema: { type: string, const: "close" }
+              description: Close-delimited; the socket stays open while events flow.
+            X-Accel-Buffering:
+              schema: { type: string, const: "no" }
+              description: Stops an intermediary holding events back until it has a bufferful.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              examples:
+                stream:
+                  summary: The opening of a stream
+                  value: |
+                    retry: 1000
+
+                    event: status
+                    data: {"protocol":1,"running":false,"canStart":true,"dspLoad":0}
+
+                    event: status
+                    data: {"protocol":1,"running":true,"canStart":true,"dspLoad":0.163}
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "503":
+          $ref: "#/components/responses/TooManyConnections"
+
+  /api/system:
+    post:
+      tags: [Control]
+      operationId: setTransport
+      summary: Start or stop the host
+      description: |
+        Starting opens the audio devices and begins processing. Stopping is never refused: if a
+        device is reconfigured underneath a running session, refusing to stop would leave no way
+        out.
+
+        Unlike the other control routes this one is *not* refused while running — sending
+        `{"running": true}` to an already-running host is accepted and does nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransportRequest" }
+            examples:
+              start: { summary: Start, value: { running: true } }
+              stop:  { summary: Stop,  value: { running: false } }
+      responses:
+        "202":
+          $ref: "#/components/responses/Accepted"
+        "400":
+          description: 'The body is not `{"running": true|false}`.'
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          description: |
+            The host cannot start. The message is `blockedReason` — the same sentence the app's own
+            window shows — or, if starting was attempted and failed, the host's error.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              examples:
+                rates:
+                  value: { error: "Sample rates differ (88200 / 44100 Hz)" }
+                devices:
+                  value: { error: "Select an input and an output device" }
+                plugin:
+                  summary: No plugin installed
+                  value: { error: "The DeFeedback plugin is not installed. Please install it." }
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+
+  /api/devices:
+    post:
+      tags: [Control]
+      operationId: setDevices
+      summary: Select the input and/or output device
+      description: |
+        Devices are named by **UID**, not by CoreAudio device ID: IDs are handed out per boot and
+        change when hardware is reconnected, so a client holding one across a reconnect would point
+        at nothing — or at a different device. Valid UIDs come from `inputDevices` / `outputDevices`
+        in the status payload.
+
+        Both sides are resolved before either is assigned, so a request naming one good device and
+        one bad one changes nothing rather than half-applying.
+
+        Selecting a device re-reads its available sample rates and may change the selected rate, so
+        read the status in the response rather than assuming the rate held.
+
+        Refused while running: changing either device means rebuilding the audio units, which is a
+        stop and start in all but name.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DeviceRequest" }
+            examples:
+              output:
+                summary: Output only
+                value: { output: "BuiltInSpeakerDevice" }
+              both:
+                summary: Both at once
+                value: { input: "BuiltInMicrophoneDevice", output: "BuiltInSpeakerDevice" }
+      responses:
+        "202":
+          $ref: "#/components/responses/Accepted"
+        "400":
+          description: Neither key was given, or a value was not a string.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: No device with that UID in the relevant direction.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              examples:
+                unknown:
+                  value: { error: 'No output device with UID "NoSuchDevice"' }
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          description: The host is running.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              examples:
+                running:
+                  value: { error: "The host must be stopped before changing devices." }
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+
+  /api/sample-rate:
+    post:
+      tags: [Control]
+      operationId: setSampleRates
+      summary: Set the input and/or output nominal sample rate
+      description: |
+        **A 202 does not mean the hardware took the rate.** Sample rate changes are asynchronous:
+        the host pushes the value at the HAL and then polls for up to two seconds. If the device
+        refuses, the host records an error and snaps its selection back to whatever the device
+        actually did — both of which arrive on the next `status` event, in `error` and
+        `inputSampleRate` / `outputSampleRate`. Clients that need to know the outcome must watch
+        the stream; do not treat the 202 body as final.
+
+        Requested rates are matched against the device's offered list with a 0.5 Hz tolerance,
+        because reported rates have survived a round trip through the HAL and exact equality is the
+        wrong test. The device's own value is what gets applied, not the number sent.
+
+        Both sides are resolved before either is assigned, so one bad value changes nothing.
+
+        Input and output must end up at the same rate for the host to start — two devices on
+        independent clocks cannot be reconciled otherwise. `sampleRatesMatch` in the status payload
+        reports this separately from `canStart`, so a client can mark which control is at fault.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SampleRateRequest" }
+            examples:
+              both:
+                summary: Both to 48 kHz
+                value: { input: 48000, output: 48000 }
+              output:
+                summary: Output only
+                value: { output: 44100 }
+      responses:
+        "202":
+          $ref: "#/components/responses/Accepted"
+        "400":
+          description: Neither key was given, or a value was not a positive number.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              examples:
+                notANumber:
+                  value: { error: '"input" must be a sample rate in hertz' }
+                negative:
+                  value: { error: '"input" must be a positive sample rate' }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: The device does not offer that rate. The message lists what it does offer.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              examples:
+                unsupported:
+                  value:
+                    error: "The output device doesn't offer 192000 Hz. Offered: 44100, 48000, 88200, 96000."
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          description: The host is running.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              examples:
+                running:
+                  value: { error: "The host must be stopped before changing sample rates." }
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+
+  /api/buffer-size:
+    post:
+      tags: [Control]
+      operationId: setBufferSize
+      summary: Set the hardware buffer size for both devices
+      description: |
+        One value drives both devices. There is no per-direction form of this, unlike
+        `/api/devices` and `/api/sample-rate`: each device gets its own hardware buffer, but the
+        two have to be sized identically for the host to reconcile them.
+
+        **Refused while running.** The size is pushed at the HAL as part of starting, and the
+        render graph's buffers are allocated from it, so it cannot change mid-session. This matches
+        the app's window, where the picker is disabled for the whole session.
+
+        Only a size from `bufferSizeChoices` in the status payload is accepted. Read that list rather
+        than hardcoding one — a client that guessed would offer a size the host refuses, or hide
+        one it accepts.
+
+        A size the selected **devices** will not take is still accepted, which is deliberate and
+        matches the window. The host reports the situation through `bufferSizeAccepted` and blocks
+        Run, with `blockedReason` naming the device that refused. Refusing here instead would make
+        this stricter than the window about the same setting, and would prevent setting a size
+        before selecting the interface that supports it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BufferSizeRequest" }
+            examples:
+              small:
+                summary: Lowest latency the host offers
+                value: { bufferSize: 32 }
+              default:
+                summary: The host's default
+                value: { bufferSize: 128 }
+      responses:
+        "202":
+          $ref: "#/components/responses/Accepted"
+        "400":
+          description: |
+            `bufferSize` was absent, was not a whole number, or was a whole number the host does
+            not offer. A boolean is refused rather than bridged to 1. The not-offered message
+            lists what the host does offer; the same list is in `bufferSizeChoices`.
+
+            A size the host does not offer is a bad value in the body rather than a missing
+            resource — the route itself exists, so it is refused here and not with a `404`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              examples:
+                missing:
+                  value: { error: 'Expected {"bufferSize": <frames>}' }
+                notAnInteger:
+                  value: { error: '"bufferSize" must be a buffer size in sample frames' }
+                notOffered:
+                  value: { error: "The host offers 32, 64, 128, 256, 512, 1024 frames, not 2048." }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          description: The host is running.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              examples:
+                running:
+                  value: { error: "The host must be stopped before changing the buffer size." }
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+
+  /api/instances:
+    get:
+      tags: [Status]
+      operationId: getInstances
+      summary: The loaded instances
+      description: |
+        The collection, as a JSON array of the same `Instance` objects the status payload carries
+        in `instances` — one shape to read wherever it arrived from.
+
+        This is for a client that wants only the instances: a Stream Deck button reading one
+        strength has no use for the device lists, the sample rates or the CPU figure. A client
+        that wants live changes should still take `/api/events` rather than polling this, and a
+        client that wants everything should take `/api/status`, which includes this list along
+        with `instanceCount` and `maxInstanceCount`.
+
+        The array order is the gallery order, and each entry's `index` is its position in it.
+        An empty array means no instances are loaded — check `pluginInstalled` in the status
+        payload before concluding the host is idle rather than unequipped.
+      responses:
+        "200":
+          description: The instances, in gallery order.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Instance" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+    head:
+      tags: [Status]
+      operationId: headInstances
+      summary: Headers for the instance list
+      responses:
+        "200":
+          description: Headers only.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Control]
+      operationId: addInstance
+      summary: Add a plugin instance
+      description: |
+        Creates one instance of the configured audio unit and appends it to `instances`.
+
+        **There is nothing to send.** The body is empty and no field is read from it: what to
+        instantiate is the host's business, and the settings that decide whether the new instance
+        comes up muted or bypassed are the host's local policy rather than a client's choice. A
+        `Content-Type: application/json` header is still required, because that check is the CSRF
+        defence for every `POST` here — see `UnsupportedMediaType`. Whatever the body contains is
+        ignored.
+
+        **It is slow and the response waits for it.** The plugin is instantiated out of process,
+        so an add can take a second or more; the 201 is not sent until the instance exists and has
+        finished loading. A plugin that fails to *load* is still added — it appears in `instances`
+        with its `error` set, exactly as it does in the app's own window — so a 201 is not on its
+        own proof that the instance is working. Check the new entry's `error`.
+
+        **`Location` names what was made.** It is `/api/instances/{id}` for the new instance —
+        the URL to `GET`, `PATCH` or `DELETE`. Without it a client adding an instance would have to
+        diff `instances` against what it held before to work out which entry is new, and two
+        clients adding at once make that ambiguous.
+
+        New instances are given the next free input and output channel rather than all stacking on
+        channel 1, matching the app's `+` button.
+
+        **A new instance may come up muted or bypassed.** The host has "start new instances muted"
+        and "start new instances bypassed" settings in its native Settings window, and they apply
+        to every add, including this one — the two interfaces share one Add, so a client cannot
+        opt out of the host's own preference. Neither setting is exposed here, for the same reason
+        the server's configuration isn't: this route is not where the host's local policy is
+        changed. Read the new entry's `muted` and `bypassed` back from the status stream rather
+        than assuming an instance starts active, and `PATCH` the URL in `Location` if you need it
+        in a particular state.
+
+        Not refused while the host is running: the graph claims slots live.
+      requestBody:
+        required: false
+        description: |
+          Ignored, and there is no schema for it. `{}` and an empty body are equally acceptable;
+          the header is what matters.
+        content:
+          application/json:
+            schema:
+              type: object
+            examples:
+              empty:
+                summary: Nothing to say
+                value: {}
+      responses:
+        "201":
+          $ref: "#/components/responses/Created"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          description: |
+            The host is already at `maxInstanceCount`, or there is no plugin to instantiate.
+
+            The cap is hard: the realtime graph preallocates its whole slot table up front. The
+            missing plugin is refused rather than added as a shell carrying a load error, because
+            neither of the app's interfaces has anywhere to show it — both replace their instance
+            list with the notice. `pluginInstalled` says which of the two applies before you ask.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              examples:
+                full:
+                  value: { error: "You already have the maximum allowed number of instances (32)." }
+                plugin:
+                  summary: No plugin installed
+                  value: { error: "The De-Feedback plugin is not installed. Please install it." }
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+
+  /api/instances/{id}:
+
+    # Declared once for the path rather than in each operation: all four address the same
+    # instance the same way.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: |
+          The instance's unique name, from `instances[].id`, and the last segment of the
+          `Location` a `POST` to the collection returns. Percent-encode it as a path segment —
+          names may contain spaces and any non-control Unicode character except `/`. Matched
+          ignoring case.
+
+          Persisted across relaunches, but **it changes when the instance is renamed** (in the app
+          or with a `PATCH` carrying `name`); a request using the old name then gets 404.
+
+          **Never an `index`.** An index shifts as soon as anything ahead of it is removed, so a
+          client that read `instances` and then acted on a position — which is every client, over
+          a round trip — would address whatever moved into that slot meanwhile.
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 32
+        example: "Instance 1"
+
+    get:
+      tags: [Status]
+      operationId: getInstance
+      summary: One instance
+      description: |
+        The same `Instance` object the list and the status payload carry — there is no separate
+        representation for a single instance, and no field it has that the list doesn't.
+
+        Useful for reading back one instance after a `PATCH`, or for a client holding an id from a
+        `Location` header. A client tracking several is better served by `/api/events`, which
+        pushes all of them on any change.
+
+        `index` is this instance's current place in the gallery, so it can differ from one reading
+        to the next without the instance having changed.
+      responses:
+        "200":
+          description: The instance.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Instance" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NoSuchInstance"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+    head:
+      tags: [Status]
+      operationId: headInstance
+      summary: Headers for one instance
+      responses:
+        "200":
+          description: Headers only.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NoSuchInstance"
+
+    patch:
+      tags: [Control]
+      operationId: updateInstance
+      summary: Change one instance's name, strength, mute, bypass or channel routing
+      description: |
+        A partial update. Send only the fields you want changed — the rest are left alone — which
+        follows `/api/devices` and `/api/sample-rate`, and means a client need not
+        read-modify-write and so cannot clobber a setting someone else moved in between.
+
+        **`PATCH` and not `PUT`** for exactly that reason: a `PUT` means "make the resource this",
+        which obliges a client to send a whole instance it may have read a round trip ago. It
+        would also raise the question of what to do with the fields it cannot set — `index`, `id`,
+        `pluginName`, `error` — where a patch simply never mentions them. There is no `PUT` here.
+
+        The target is named by the path only. An `id` in the body is ignored rather than refused:
+        the URL is unambiguous, so there is nothing to reconcile.
+
+        **Renaming:** send `name` to rename the instance. Since the name *is* the `id`, the
+        instance's URL changes with it — use the new name for subsequent requests.
+
+        **Not refused while the host is running**, matching the app's own window, where all of
+        these stay live. Strength and mute are written straight to the plugin's `AUParameter`;
+        bypass and a channel change are relaxed atomic stores the render thread picks up on its
+        next buffer. None of them reconfigures the audio graph.
+
+        Note that `muted` and `bypassed` are not the same kind of thing, though they sit together:
+        mute is the *plugin's* own parameter, so setting it here also moves the control in the
+        plugin's UI, while bypass is the *host's* routing and the plugin never learns of it. See
+        the `Instance` schema.
+
+        Everything is validated before anything is applied, so a request carrying one good value
+        and one bad one changes nothing rather than half-landing.
+
+        Changes made here reach the app's window and the plugin's own UI immediately, and are
+        persisted by the host's ordinary autosave — there is no separate save step.
+
+        The response is a full status snapshot rather than the patched instance, like every other
+        mutation here. `GET` the same URL if the instance alone is what you want.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InstancePatch" }
+            examples:
+              strength:
+                summary: Strength only
+                value: { strength: 75 }
+              routing:
+                summary: Both channels at once
+                value: { inputChannel: 2, outputChannel: 3 }
+              mute:
+                summary: Mute
+                value: { muted: true }
+              unbypass:
+                summary: Take an instance out of bypass
+                value: { bypassed: false }
+              rename:
+                summary: Rename an instance
+                value: { name: "Stage Left" }
+      responses:
+        "202":
+          $ref: "#/components/responses/Accepted"
+        "400":
+          description: |
+            None of the settable fields, a value of the wrong type or out of range, or an invalid
+            `name` (empty, longer than 32 characters, or containing a control character or `/`).
+
+            Types are checked strictly in both directions, because JSON booleans and numbers
+            bridge to one another on this server: `{"strength": true}` is refused rather than read
+            as 1%, and `{"muted": 1}` is refused rather than silencing the instance.
+
+            A channel the selected device does not have is a bad value in the request, not a
+            missing resource, so it answers 400 rather than 404. The message states how many
+            channels that device does have.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              examples:
+                nothingToChange:
+                  value:
+                    error: 'Expected at least one of ["name", "strength", "muted", "bypassed", "inputChannel" or "outputChannel"]'
+                badName:
+                  value: { error: "The instance name can be at most 32 characters." }
+                outOfRange:
+                  value: { error: '"strength" must be an integer from 0 to 100' }
+                notAnInteger:
+                  value: { error: '"inputChannel" must be a valid 0-based channel number' }
+                notABoolean:
+                  value: { error: '"muted" must be true or false' }
+                noSuchChannel:
+                  value:
+                    error: |
+                      Channel "inputChannel" is not available on the input device.
+                      Specify a channel between  0 and 1.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: |
+            No instance has that id — read it as "already gone", as on the `DELETE`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              examples:
+                gone:
+                  value: { error: 'No instance exists with id "Instance 1".' }
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          description: |
+            The request is well formed but the host cannot honour it: the `name` is already used
+            by another instance (compared ignoring case), the plugin publishes no `Strength`
+            parameter, or no device is selected in the direction being routed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              examples:
+                duplicateName:
+                  value: { error: 'Another instance is already named "Stage Left".' }
+                noStrength:
+                  value: { error: "De-Feedback has no parameter 'Strength'." }
+                noDevice:
+                  value: { error: "No input device is selected" }
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+
+    delete:
+      tags: [Control]
+      operationId: removeInstance
+      summary: Remove a plugin instance
+      description: |
+        Removes the instance the path names.
+
+        **No body, and no `Content-Type` requirement**, unlike every `POST` and the `PATCH`. That
+        check is the CSRF defence and `DELETE` does not need it: a cross-site form can only issue
+        `GET` or `POST`, so reaching this at all means `fetch`, which puts the request behind a
+        preflight this server answers for no origin.
+
+        **Immediate, with no confirmation step.** Both of the app's own interfaces ask before
+        calling this — the control page opens a dialog, the window opens a sheet — but that is a
+        property of those interfaces, not of the route. Confirming belongs to whatever a person is
+        actually looking at, and a two-phase API would put a token and an expiry in the way of
+        every script for no benefit. A client automating removals should send this directly; a
+        client driving a person should ask first.
+
+        Not refused while the host is running. The instance leaves `instances` at once, but its
+        render resources are freed only after the audio thread has had time to move past it —
+        which is why this answers 202 where the add answers 201.
+      responses:
+        "202":
+          $ref: "#/components/responses/Accepted"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NoSuchInstance"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+
+components:
+
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: |
+        Optional, and off by default. When enabled in the app's Settings window, every route
+        requires it — the page, the API and the event stream alike.
+
+        Credentials are **not** confidential: the endpoint is plain HTTP, so they cross the network
+        base64-encoded. Rejected requests are answered with `WWW-Authenticate: Basic realm="DeFeedback
+        Host"`, which is what makes a browser show its own sign-in sheet and then attach the header
+        to everything afterwards, including the `EventSource` request.
+
+  responses:
+
+    Accepted:
+      description: |
+        Applied, with a fresh status snapshot so the caller need not wait for the next event. Note
+        the caveat on `/api/sample-rate`: for that route "applied" means handed to the hardware,
+        not confirmed by it.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Status" }
+
+    Created:
+      description: |
+        The instance exists and has finished loading — `201` rather than the `202` the other
+        commands use, because by the time this is sent there is nothing left to accept.
+
+        The body is the same fresh status snapshot, so the new instance can be read out of
+        `instances` without a second request. `Location` says which entry it is.
+      headers:
+        Location:
+          schema: { type: string }
+          description: |
+            The new instance's own URL — `GET` it for the instance alone, `PATCH` it to change a
+            setting, `DELETE` it to remove it. Its last segment is the instance's `id` (its name),
+            percent-encoded.
+          example: "/api/instances/Instance%201"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Status" }
+
+    NoSuchInstance:
+      description: |
+        No instance has that id. Read it as "already gone" rather than as something to retry — two
+        clients watching the same stream can both press Remove on one row, and the second is told
+        its target had already been removed rather than believing it did it.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example:
+            error: 'No instance exists with id "Instance 1".'
+
+    Unauthorized:
+      description: Authentication is enabled and the credentials were absent or wrong.
+      headers:
+        WWW-Authenticate:
+          schema: { type: string }
+          example: 'Basic realm="DeFeedback Host", charset="UTF-8"'
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: "Authentication required" }
+
+    MethodNotAllowed:
+      description: |
+        The path exists but not with this method. A 404 here would send someone hunting for a typo
+        in a URL that is correct.
+      headers:
+        Allow:
+          schema: { type: string }
+          example: "POST"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+    UnsupportedMediaType:
+      description: |
+        Mutating routes require `Content-Type: application/json`. This is also the CSRF defence: a
+        browser caches Basic Auth credentials and will attach them to a cross-site request, but a
+        form post — the only kind a page can make cross-origin without a preflight — cannot set
+        this content type. No CORS headers are sent anywhere.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: "Content-Type application/json required" }
+
+    BodyTooLarge:
+      description: The request body exceeded 64 KiB. The connection is closed.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: "Body exceeds 65536 bytes" }
+
+    TooManyConnections:
+      description: |
+        All 32 connection slots are in use. Answered rather than dropped, because a client that
+        gets a 503 knows to back off where a silently closed socket looks like a crash.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: "Too many connections" }
+
+  schemas:
+
+    Error:
+      type: object
+      description: The body of every non-2xx response, so clients have one shape to handle.
+      required: [error]
+      additionalProperties: false
+      properties:
+        error:
+          type: string
+          description: A sentence intended to be shown to a person as-is.
+          examples: ["The host must be stopped before changing devices."]
+
+    Device:
+      type: object
+      description: One CoreAudio device, as offered in a menu.
+      required: [uid, name, channels]
+      additionalProperties: false
+      properties:
+        uid:
+          type: string
+          description: |
+            Stable identifier, and the value to send to `/api/devices`. Survives reconnection and
+            reboot, unlike the CoreAudio device ID.
+          examples: ["BuiltInSpeakerDevice"]
+        name:
+          type: string
+          examples: ["MacBook Pro Speakers"]
+        channels:
+          type: integer
+          minimum: 1
+          description: |
+            Channel count **in this direction only**. A device appearing in both lists reports its
+            input count in `inputDevices` and its output count in `outputDevices`.
+
+    Instance:
+      type: object
+      description: |
+        One loaded plugin instance and the settings the control page shows for it.
+
+        Every field below except `index`, `pluginName` and `error` is settable through
+        `PATCH /api/instances/{id}` (`id` is set by sending `name`). The *list* is mutable too —
+        `POST /api/instances` adds, `DELETE /api/instances/{id}` removes.
+      required:
+        [index, id, pluginName, strength, muted, bypassed, inputChannel, outputChannel, error]
+      additionalProperties: false
+      properties:
+        index:
+          type: integer
+          minimum: 0
+          description: |
+            Position in the gallery, matching the app's window. Note that this shifts when an
+            instance ahead of it is removed — prefer `id` to refer to an instance.
+        id:
+          type: string
+          minLength: 1
+          maxLength: 32
+          description: |
+            The instance's unique, user-set name, which identifies it in `/api/instances/{id}`.
+            Unique ignoring case; never empty; at most 32 characters; no control characters or
+            `/`. New instances get "Instance N" (the lowest free N).
+
+            Persisted across relaunches, but changes when the instance is renamed — in the app's
+            window or by sending `name` in a `PATCH`.
+          examples: ["Instance 1"]
+        pluginName:
+          type: string
+          description: The audio unit's own name.
+          examples: ["De-Feedback"]
+        strength:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 100
+          description: |
+            The plugin's own `Strength` parameter, as a whole percentage, normalised from whatever
+            range the plugin publishes.
+
+            Null while the instance is still loading, and for any plugin that exposes no such
+            parameter — the host is repointed at a different effect by editing three constants, so
+            this is matched by parameter name rather than by a fixed address.
+          examples: [100]
+        muted:
+          type: boolean
+          description: |
+            Whether the instance is silenced. This is the **plugin's** own `Mute` parameter: the
+            app's window, this page and the plugin's own UI are three views of one control, so
+            none of them can show a different answer.
+
+            (The host retains a render-loop mute of its own, used only as the fallback for a
+            plugin that publishes no `Mute` parameter. Either way this field is the mute in
+            effect, so it is never null, and setting it through the `PATCH` goes to
+            whichever mechanism is in charge.)
+        bypassed:
+          type: boolean
+          description: |
+            The **host's** bypass: the render loop wires this instance's input channel straight to
+            its output channel and does not call the plugin at all. There is no plugin parameter
+            this could be, since the plugin is not involved.
+        inputChannel:
+          type: integer
+          minimum: 0
+          description: |
+            Which channel of the input device feeds this instance, **0-based**. Displayed as
+            `inputChannel + 1` in both the app's window and the control page — a client sending it
+            in a `PATCH` must send the 0-based value, not what it displayed.
+
+            Usually less than `inputChannelCount`, but **not guaranteed to be**: a saved
+            routing is remembered rather than clamped when a device with fewer channels
+            is selected, and the engine leaves that instance's input unwired until the channel
+            exists again. It does not block the start. Render it the way the app's window does —
+            in parentheses — rather than silently showing the first channel in its place.
+        outputChannel:
+          type: integer
+          minimum: 0
+          description: |
+            Which channel of the output device this instance writes to, 0-based. Can sit outside
+            `outputChannelCount` for the same reason `inputChannel` can, in which case the
+            instance's output reaches no channel until that one exists again.
+        error:
+          type: [string, "null"]
+          description: Why this instance failed to load, or null.
+
+    TransportRequest:
+      type: object
+      required: [running]
+      additionalProperties: false
+      properties:
+        running:
+          type: boolean
+          description: True to start, false to stop.
+
+    DeviceRequest:
+      type: object
+      description: At least one of `input` or `output` must be present.
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        input:
+          type: string
+          description: UID of a device from `inputDevices`.
+        output:
+          type: string
+          description: UID of a device from `outputDevices`.
+
+    InstancePatch:
+      type: object
+      description: |
+        At least one settable field. Absent fields are left unchanged, and the read-only fields
+        of `Instance` — `index`, `pluginName`, `error` — have no place here.
+
+        An `id` is accepted and ignored, so a client can send back a slice of what it read without
+        stripping it; the path is what names the target. To change the `id`, send `name`.
+      # A request that changes nothing is refused with a 400 rather than answered with a 202.
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 32
+          description: |
+            Renames the instance; becomes its new `id`. Leading and trailing whitespace is
+            trimmed. 400 if it is empty, longer than 32 characters, or contains a control
+            character or `/`; 409 if another instance already has it (compared ignoring case).
+        strength:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: |
+            The plugin's own `Strength`, as a whole percentage. Scaled onto whatever range the
+            plugin actually publishes, so a plugin expressing it as 0…1 and one expressing it as
+            0…100 both take the same number here.
+
+            409 for a plugin that publishes no such parameter — the same instances whose
+            `strength` reads null.
+        inputChannel:
+          type: integer
+          minimum: 0
+          description: |
+            **0-based**, and must be less than `inputChannelCount`. Both the app's window and the
+            control page display `inputChannel + 1`; that displayed number is not what to send.
+        outputChannel:
+          type: integer
+          minimum: 0
+          description: 0-based, and must be less than `outputChannelCount`.
+        muted:
+          type: boolean
+          description: |
+            Silences the instance. This drives the **plugin's own `Mute` parameter**, so the
+            change shows in the plugin's UI and the app's window as well — they are three views of
+            one control, not three controls.
+
+            Must be a JSON boolean. `1` is refused rather than read as `true`.
+        bypassed:
+          type: boolean
+          description: |
+            The **host's** bypass: the render loop wires this instance's input channel straight to
+            its output and does not call the plugin. Unlike `muted` there is no plugin parameter
+            behind this, so the plugin has no way to know it is bypassed.
+
+            Must be a JSON boolean.
+
+    SampleRateRequest:
+      type: object
+      description: At least one of `input` or `output` must be present.
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        input:
+          type: number
+          exclusiveMinimum: 0
+          description: Hertz. Must be in `inputSampleRates`, matched to within 0.5 Hz.
+        output:
+          type: number
+          exclusiveMinimum: 0
+          description: Hertz. Must be in `outputSampleRates`, matched to within 0.5 Hz.
+
+    BufferSizeRequest:
+      type: object
+      required: [bufferSize]
+      additionalProperties: false
+      properties:
+        bufferSize:
+          type: integer
+          description: |
+            Sample frames, for both devices at once. Must be one of `bufferSizeChoices` from the status
+            payload; read that rather than hardcoding this example list, which is the host's
+            current offering and not a promise.
+
+            Named the same as the status field it sets, so a client can write back what it read.
+          examples: [32, 64, 128, 256, 512, 1024]
+
+    Status:
+      type: object
+      description: |
+        The complete host state. Identical whether read from `GET /api/status`, received as a
+        `status` event, or returned in a 201 or 202.
+
+        Additive fields may appear without a protocol bump, so clients should ignore unknown keys.
+      required:
+        - protocol
+        - running
+        - canStart
+        - blockedReason
+        - sampleRate
+        - bufferSize
+        - bufferSizeChoices
+        - bufferSizeAccepted
+        - pluginInstalled
+        - pluginMessage
+        - pluginURL
+        - instances
+        - instanceCount
+        - maxInstanceCount
+        - inputDevice
+        - outputDevice
+        - inputDeviceUID
+        - outputDeviceUID
+        - inputDeviceMissing
+        - outputDeviceMissing
+        - inputDevices
+        - outputDevices
+        - inputChannelCount
+        - outputChannelCount
+        - inputSampleRate
+        - outputSampleRate
+        - inputSampleRates
+        - outputSampleRates
+        - sampleRatesMatch
+        - dspLoad
+        - peakDspLoad
+        - underruns
+        - hasRendered
+        - realtime
+        - error
+      properties:
+
+        protocol:
+          type: integer
+          const: 1
+          description: |
+            Wire format version. Bumped only for a breaking change, so a cached page can refuse a
+            server it does not understand rather than misreport it.
+
+        running:
+          type: boolean
+          description: Whether the audio devices are open and processing.
+
+        canStart:
+          type: boolean
+          description: |
+            Whether a start would be accepted. False means `blockedReason` says why. Stopping is
+            never gated on this.
+
+        blockedReason:
+          type: [string, "null"]
+          description: |
+            Why the host cannot start, phrased for a person, or null when nothing is in the way.
+            The same sentence the app's own window shows and the same one returned in a 409.
+          examples: ["Sample rates differ (88200 / 44100 Hz)"]
+
+        sampleRate:
+          type: number
+          description: |
+            The rate audio is actually running at while running; the selected output rate while
+            stopped. Prefer `inputSampleRate` / `outputSampleRate`, which are unambiguous — this
+            field can only show one of two rates when they differ, which is exactly when it
+            matters.
+
+        bufferSize:
+          type: integer
+          description: |
+            Hardware buffer size in sample frames, the same on both devices. Set with
+            `POST /api/buffer-size`, which is refused while running.
+          examples: [32, 64, 128, 256, 512, 1024]
+
+        bufferSizeChoices:
+          type: array
+          description: |
+            The sizes `POST /api/buffer-size` will accept, in the order the app's own picker shows
+            them. Published so a client can build its menu from the host rather than hardcoding a
+            list that could offer a size the host refuses, or hide one it accepts.
+          items:
+            type: integer
+            minimum: 1
+          examples: [[32, 64, 128, 256, 512, 1024]]
+
+        bufferSizeAccepted:
+          type: boolean
+          description: |
+            Whether the **selected devices** will take the current `bufferSize`. Both hardware
+            buffers must end up the same size, so a size either device rejects blocks the start.
+
+            False is not an error and does not mean the setting failed: the host accepts a size no
+            device supports, exactly as its own window does, so a size can be chosen before the
+            interface that supports it. It reports the consequence here and in `blockedReason`,
+            which names the device. Surfaced separately from `canStart` — like `sampleRatesMatch`,
+            and for the same reason — so a client can mark the control at fault rather than only
+            saying no.
+
+        pluginInstalled:
+          type: boolean
+          description: |
+            Whether the Audio Unit this host is built to load is registered with the system at
+            all. False means there is nothing to host: `canStart` is false with `blockedReason`
+            saying so, and `POST /api/instances` is refused with a 409.
+
+            A client should replace its instance list with `pluginMessage` rather than showing an
+            empty one — that is what the app's own window and control page both do, since an
+            empty list invites the reader to press Add, which is the one thing that cannot work.
+
+            Tracked live: the host follows the system notification for changes to the registered
+            components, so installing the plugin while the app is running flips this without a
+            relaunch.
+
+        pluginMessage:
+          type: [string, "null"]
+          description: |
+            What to tell the reader when `pluginInstalled` is false, phrased for a person; null
+            when it is true. The same sentence the app's own window shows and the same one
+            returned in the 409.
+
+            Sent rather than left for a client to compose, for the reason `bufferSizeChoices` and
+            `maxInstanceCount` are: the plugin this host loads is three constants in
+            `PluginConfiguration`, so a client carrying its own copy of the name would go on
+            naming whatever it was written against.
+          examples: ["The De-Feedback plugin is not installed. Please install it."]
+
+        pluginURL:
+          type: string
+          format: uri
+          description: |
+            Where to get the plugin. Always sent, not only when it is missing — it is a property
+            of the plugin this host is configured for, not of the current state. Show it with
+            `pluginMessage`: being told something is missing without being told where to get it
+            leaves the reader where they started.
+          examples: ["https://www.alphalabsaudio.com/defeedback/"]
+
+        instances:
+          type: array
+          description: |
+            Every loaded plugin instance, in gallery order.
+
+            Instances saved from an earlier session are still restored when the plugin is no
+            longer installed, so their routing and settings survive reinstalling it — they appear
+            here with their `error` set. `pluginInstalled` is what a client should branch on, not
+            this array being empty.
+          items: { $ref: "#/components/schemas/Instance" }
+
+        instanceCount:
+          type: integer
+          minimum: 0
+          description: |
+            How many plugin instances are loaded — `instances.length`, carried separately so a
+            client that only wants the number need not read the array.
+
+        maxInstanceCount:
+          type: integer
+          minimum: 1
+          description: |
+            The hard cap on instances: `POST /api/instances` is refused with a 409 once
+            `instanceCount` reaches it. Hard rather than advisory, because the
+            engine controller preallocates its whole slot table up front.
+
+            Published so a client can disable its own Add rather than hardcoding the number and
+            offering a button that can only fail.
+          examples: [32]
+
+        inputDevice:
+          type: [string, "null"]
+          description: |
+            Name of the selected input device, for display. When `inputDeviceMissing` is true this
+            is the name the device had when it was last seen — the host remembers a selection
+            across the hardware going away — or its UID for a session saved before names were
+            recorded.
+        outputDevice:
+          type: [string, "null"]
+          description: Name of the selected output device, for display. See `inputDevice`.
+
+        inputDeviceUID:
+          type: [string, "null"]
+          description: |
+            UID of the selected input device — the value to send back to `/api/devices`. This can
+            name a device that is **not** in `inputDevices`; check
+            `inputDeviceMissing` before assuming the selection is usable.
+        outputDeviceUID:
+          type: [string, "null"]
+          description: UID of the selected output device. See `inputDeviceUID`.
+
+        inputDeviceMissing:
+          type: boolean
+          description: |
+            True when a device is selected but the HAL is not reporting it — an interface that is
+            unplugged, or was never connected since the session that chose it was saved.
+
+            The selection is kept rather than replaced: it stays chosen until something else is
+            picked, and the host takes it up again by itself the moment it is reconnected. While
+            true, `canStart` is false and `blockedReason` names the device. Show it in the device
+            menu the way the app's window does — its name in parentheses — since it is not in
+            `inputDevices` and the menu would otherwise show nothing selected.
+        outputDeviceMissing:
+          type: boolean
+          description: The same, for the output selection.
+
+        inputDevices:
+          type: array
+          description: Every device with at least one input channel.
+          items: { $ref: "#/components/schemas/Device" }
+        outputDevices:
+          type: array
+          description: Every device with at least one output channel.
+          items: { $ref: "#/components/schemas/Device" }
+
+        inputChannelCount:
+          type: integer
+          minimum: 0
+          description: |
+            Channels on the **selected** input device, and what makes an instance's `inputChannel`
+            valid or not. Zero when no device is selected, and also zero when the selected one is
+            missing — every instance's input channel is then out of range, and every input link
+            is left unwired until it returns.
+
+            Derivable from `inputDevices` and `inputDeviceUID`, but stated outright so a client
+            cannot arrive at a different answer than the app's own window does.
+        outputChannelCount:
+          type: integer
+          minimum: 0
+          description: |
+            Channels on the selected output device; the same rule as `inputChannelCount` for
+            `outputChannel`.
+
+        inputSampleRate:
+          type: [number, "null"]
+          description: Selected input rate in hertz, or null if the device reports none.
+        outputSampleRate:
+          type: [number, "null"]
+          description: Selected output rate in hertz, or null if the device reports none.
+
+        inputSampleRates:
+          type: array
+          description: Rates the input device offers. May be empty.
+          items: { type: number }
+        outputSampleRates:
+          type: array
+          description: Rates the output device offers. May be empty.
+          items: { type: number }
+
+        sampleRatesMatch:
+          type: boolean
+          description: |
+            Whether input and output are at the same rate, within 0.5 Hz. False blocks starting.
+            Reported separately from `canStart` so a client can mark the two controls responsible
+            rather than only saying no.
+
+        dspLoad:
+          type: number
+          minimum: 0
+          description: |
+            **DSP load**, as a fraction: render time as a share of the buffer period. `1.0` means a
+            callback used its entire budget and the next one is already late.
+
+            This is the figure a DAW labels "CPU" and the one that predicts glitches — *not* the
+            process's share of the machine, which is what Activity Monitor shows and which can look
+            comfortable while audio is already breaking up. With the plugin hosted out of process
+            the measurement spans the IPC round trip.
+
+            Meaningless until `hasRendered` is true.
+          examples: [0.163]
+
+        peakDspLoad:
+          type: number
+          minimum: 0
+          description: |
+            Highest DSP load seen this session, same units. Can exceed 1.0 — the first callback
+            after starting typically includes plugin warm-up and reads very high.
+          examples: [8.04]
+
+        underruns:
+          type: integer
+          minimum: 0
+          description: |
+            Times the output callback found the ring buffer empty. The audible symptom of two
+            devices on independent clocks drifting apart.
+
+        hasRendered:
+          type: boolean
+          description: |
+            Whether the output device has called back at least once. While false, `dspLoad` and
+            `peakDspLoad` are zero because nothing has run — not because the load is zero. Clients
+            should show a placeholder rather than a confident 0%.
+
+        realtime:
+          type: boolean
+          description: |
+            Whether every thread touching samples holds a realtime scheduling policy. False means
+            audio work has ended up on a normal thread and will glitch under any load at all — a
+            loud failure, not a hint.
+
+        error:
+          type: [string, "null"]
+          description: |
+            The host's most recent error, or null. This is where an asynchronous failure surfaces —
+            notably a sample rate the hardware refused after the request was already answered with
+            a 202.

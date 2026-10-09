@@ -1,0 +1,117 @@
+# ─── macOS ─────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# ─── Xcode ─────────────────────────────────────────────────────────────
+# Per-user state (breakpoints, window layout, personal schemes, find scopes).
+# Shared schemes belong in xcshareddata/, which is kept.
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+
+# Build output
+build/
+DerivedData/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+*.xcarchive
+
+# Xcode test results and profiling traces
+*.xcresult
+*.trace
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+Package.pins
+Package.resolved.bak
+
+# CocoaPods / Carthage (not used today, but cheap insurance)
+Pods/
+Carthage/Build/
+Carthage/Checkouts/
+
+# ─── JetBrains (IntelliJ IDEA, WebStorm, AppCode, CLion, …) ────────────
+# Keep shared project files (misc.xml, modules.xml, *.iml, vcs.xml);
+# ignore per-user and generated state.
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/usage.statistics.xml
+.idea/dictionaries/
+.idea/shelf/
+.idea/httpRequests/
+.idea/dataSources/
+.idea/dataSources.local.xml
+.idea/sqldialects.xml
+.idea/contentModel.xml
+.idea/caches/
+.idea/libraries/
+.idea/artifacts/
+.idea/aws.xml
+.idea/**/uiDesigner.xml
+.idea/**/gradle.xml
+.idea_modules/
+out/
+*.iws
+cmake-build-*/
+
+# ─── Visual Studio Code ────────────────────────────────────────────────
+# Keep shared launch/tasks/settings/extensions; ignore everything else.
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+.history/
+*.vsix
+
+# ─── Visual Studio (incl. Visual Studio for Mac) ───────────────────────
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+[Dd]ebug/
+[Rr]elease/
+[Bb]in/
+[Oo]bj/
+
+# ─── Node.js ───────────────────────────────────────────────────────────
+# The Stream Deck plugin keeps its own rules in streamdeck/.gitignore
+# (node_modules/, *.sdPlugin/bin, *.sdPlugin/logs) and
+# streamdeck/.idea/.gitignore. Only generic Node noise lives here.
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm/
+*.tsbuildinfo
+
+# ─── Editors / misc ────────────────────────────────────────────────────
+*.swp
+*.swo
+*~
+.env
+.env.local
+*.log

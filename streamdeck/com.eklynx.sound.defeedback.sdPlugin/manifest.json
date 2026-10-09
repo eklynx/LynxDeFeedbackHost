@@ -1,0 +1,79 @@
+{
+	"Name": "Lynx DeFeedback Host Controller",
+	"Version": "0.1.0.0",
+	"Author": "EKLynx Software",
+	"Actions": [
+		{
+			"Name": "Mute",
+			"UUID": "com.eklynx.sound.defeedback.mute",
+			"Tooltip": "Mutes the channel",
+			"Icon": "imgs/plugin/DeFeedbackHostLogo",
+			"PropertyInspectorPath": "ui/mute.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/mute/mute",
+					"TitleAlignment": "top"
+				}
+			]
+		},
+		{
+			"Name": "Bypass",
+			"UUID": "com.eklynx.sound.defeedback.bypass",
+			"Tooltip": "Bypasses the plugin",
+			"Icon": "imgs/plugin/DeFeedbackHostLogo",
+			"PropertyInspectorPath": "ui/bypass.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/bypass/bypass",
+					"TitleAlignment": "top"
+				}
+			]
+		},
+		{
+			"Name": "Strength",
+			"UUID": "com.eklynx.sound.defeedback.strength",
+			"Tooltip": "Sets the strength of the specified plugin instance",
+			"Icon": "imgs/plugin/DeFeedbackHostLogo",
+			"PropertyInspectorPath": "ui/strength.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/strength/strength_key",
+					"TitleAlignment": "top"
+				}
+			]
+		}
+	],
+	"Category": "Lynx DeFeedback Host Controller",
+	"CategoryIcon": "imgs/plugin/logo",
+	"CodePath": "bin/plugin.js",
+	"Description": "Control plugin for the Lynx DeFeedback Host",
+	"Icon": "imgs/plugin/DeFeedbackHost",
+	"SDKVersion": 2,
+	"Software": {
+		"MinimumVersion": "6.5"
+	},
+	"OS": [
+		{
+			"Platform": "mac",
+			"MinimumVersion": "12"
+		},
+		{
+			"Platform": "windows",
+			"MinimumVersion": "10"
+		}
+	],
+	"Nodejs": {
+		"Version": "20",
+		"Debug": "enabled"
+	},
+	"UUID": "com.eklynx.sound.defeedback"
+}

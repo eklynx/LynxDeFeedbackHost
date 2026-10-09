@@ -1,0 +1,141 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "bufferSizeNotAppliedFormatActualGiven" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The device “%1$(deviceName)@” wouldn't take a %2$(requestedBuffer)lld sample buffer size and used %3$(actualBuffer)lld instead. Both devices have to run the same buffer size — pick another value."
+          }
+        }
+      }
+    },
+    "bufferSizeNotAppliedFormatNoActualGiven" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The device “%1$(deviceName)@” wouldn't take a %2$(requestedBuffer)lld sample buffer size. Both devices have to run the same buffer size — pick another value."
+          }
+        }
+      }
+    },
+    "coreAudioErrorFormat" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CoreAudio error %1$(osstatus)lld while %2$(what)@."
+          }
+        }
+      }
+    },
+    "engineUnavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable allocate the audio engine's buffers."
+          }
+        }
+      }
+    },
+    "halComponentUnavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't create a CoreAudio I/O unit."
+          }
+        }
+      }
+    },
+    "maxInstancesReachedFormat" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You already have the maximum allowed number of instances (%1$(maxInstances)lld)."
+          }
+        }
+      }
+    },
+    "microphoneAccessDenied" : {
+      "comment" : "Privacy permissions are blocking audio input/output",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DeFeedbackHost needs audio input access. Grant it in System Settings › Privacy & Security › Microphone."
+          }
+        }
+      }
+    },
+    "noDeviceSelected" : {
+      "comment" : "An audio device (either input or output) its not set.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\"Choose an input and an output device first.\""
+          }
+        }
+      }
+    },
+    "pluginNotFoundFormat" : {
+      "comment" : "The De-Feedback plugin is not installed.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The “%1$(pluginName)@“ plugin is not installed. Please install it."
+          }
+        }
+      }
+    },
+    "sampleRateMismatchFormat" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The input sample rate %1$(inputRate)lld Hz and the output sample rate %2$(outputRate)lld Hz must match.\n"
+          }
+        }
+      }
+    },
+    "sampleRateNotAppliedFormat" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Device %1$(deviceName)@ would not switch to the sample rate of %2$(sampleRate)lld Hz. Another app may be using it."
+          }
+        }
+      }
+    },
+    "sampleRateUnavailableFormat" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't read the sample rate of “%1$(deviceName)@."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.3"
+}

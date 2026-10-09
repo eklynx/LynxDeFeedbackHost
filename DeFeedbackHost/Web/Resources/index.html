@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<!--
+  index.html — the control page served by WebControlService.
+
+  Deliberately one self-contained file with no build step and no CDN: it ships inside the app
+  bundle and is served to machines that may have no internet route at all.
+
+  Commands go out as POST /api/system. Status arrives on one EventSource at /api/events.
+    - AI used heavily in creating the web interface to keep things as low resource as possible.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>DeFeedback Host</title>
+<style>
+  :root {
+    --bg: #17181c;
+    --panel: #212329;
+    --line: #34373f;
+    --text: #e9eaee;
+    --dim: #9a9ead;
+    --accent: #5b9dff;
+    --good: #5ad19a;
+    --warn: #f0a44a;
+    --bad: #ef6b63;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f4f5f7;
+      --panel: #ffffff;
+      --line: #dcdee4;
+      --text: #1b1c20;
+      --dim: #62666f;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 2rem 1rem;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    display: flex;
+    justify-content: center;
+  }
+
+  main { width: 100%; max-width: 30rem; }
+
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+  }
+
+  h1 { font-size: 1.15rem; font-weight: 600; margin: 0; }
+
+  /* Connection state of the event stream itself, distinct from whether audio is running. */
+  #link { font-size: 0.8rem; color: var(--dim); display: flex; align-items: center; gap: 0.4rem; }
+  #link::before {
+    content: "";
+    width: 0.5rem; height: 0.5rem;
+    border-radius: 50%;
+    background: var(--dim);
+  }
+  #link.live::before { background: var(--good); }
+  #link.lost::before { background: var(--bad); }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+  }
+
+  button#transport {
+    width: 100%;
+    padding: 0.9rem;
+    font: inherit;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #fff;
+    background: var(--accent);
+    border: none;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: background 120ms ease, opacity 120ms ease;
+  }
+  button#transport.running { background: var(--bad); }
+  button#transport:disabled { opacity: 0.45; cursor: not-allowed; }
+  button#transport:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+
+  #cpu {
+    font-size: 2.6rem;
+    font-weight: 300;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+  #cpu.warn { color: var(--warn); }
+  #cpu.bad  { color: var(--bad); }
+
+  .caption { font-size: 0.8rem; color: var(--dim); margin: 0.15rem 0 0; }
+
+  .field {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.7rem;
+    /* On a phone the device name and its rate won't sit side by side; let the rate drop to its
+       own line rather than squeezing the device menu down to nothing. */
+    flex-wrap: wrap;
+  }
+  .field:last-of-type { margin-bottom: 0; }
+  .field label {
+    flex: 0 0 4rem;
+    font-size: 0.875rem;
+    color: var(--dim);
+  }
+  .field select {
+    flex: 1 1 8rem;
+    min-width: 0;
+    padding: 0.45rem 0.6rem;
+    font: inherit;
+    font-size: 0.875rem;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 0.4rem;
+  }
+  .field select:disabled { opacity: 0.45; cursor: not-allowed; }
+  .field select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .field select.rate {
+    flex: 0 0 7rem;
+    font-variant-numeric: tabular-nums;
+  }
+  /* Two devices on independent clocks can't be reconciled at different rates, so a mismatch is
+     marked on the controls that cause it, not just in the notice at the top. */
+  .field select.rate.mismatch {
+    border-color: var(--warn);
+    color: var(--warn);
+  }
+
+  .panel-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+  .panel-head h2 { font-size: 0.9rem; font-weight: 600; margin: 0; }
+  .panel-head .actions { display: flex; align-items: center; gap: 0.6rem; }
+
+  /* Secondary buttons — Add and Remove. Distinct from #transport, which is the one thing on the
+     page you press without reading, and is sized accordingly. */
+  button.small {
+    padding: 0.25rem 0.6rem;
+    font: inherit;
+    font-size: 0.8rem;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 0.35rem;
+    cursor: pointer;
+  }
+  button.small:hover:not(:disabled) { border-color: var(--accent); }
+  button.small:disabled { opacity: 0.45; cursor: not-allowed; }
+  button.small:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button.remove { color: var(--bad); }
+  button.remove:hover:not(:disabled) { border-color: var(--bad); }
+
+  .instances { list-style: none; margin: 0; padding: 0; }
+  .instances > li {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: baseline;
+    gap: 0.4rem 0.75rem;
+    padding: 0.75rem 0;
+    border-top: 1px solid var(--line);
+  }
+  .instances > li:first-child { border-top: none; padding-top: 0; }
+  .instances > li:last-child { padding-bottom: 0; }
+
+  .inst-name { font-size: 0.9rem; display: flex; align-items: baseline; gap: 0.5rem; min-width: 0; }
+  .inst-name input[type="text"] { font: inherit; width: 16rem; max-width: 100%; }
+  .inst-plugin { font-size: 0.8rem; color: var(--dim); }
+  .inst-index { font-size: 0.8rem; color: var(--dim); font-variant-numeric: tabular-nums; }
+
+  .inst-row {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+  .inst-row label { display: flex; align-items: center; gap: 0.4rem; }
+  .inst-caption { font-size: 0.8rem; color: var(--dim); }
+
+  .inst-row input[type="range"] {
+    flex: 1 1 8rem;
+    min-width: 5rem;
+    accent-color: var(--accent);
+  }
+  .inst-strength {
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+    min-width: 2.6rem;
+    text-align: right;
+  }
+
+  .inst-toggles { gap: 1rem; }
+  .inst-toggles input { accent-color: var(--accent); }
+
+  /* The remove confirmation. A native <dialog>, so Escape, the focus trap and the inert backdrop
+     come from the browser rather than from JS that would have to be written and kept right. */
+  dialog {
+    max-width: 22rem;
+    padding: 1.1rem 1.25rem;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 0.6rem;
+  }
+  dialog::backdrop { background: rgb(0 0 0 / 0.45); }
+  dialog h2 { font-size: 1rem; margin: 0 0 0.5rem; }
+  dialog p { margin: 0 0 0.5rem; font-size: 0.85rem; }
+  dialog .dialog-note { color: var(--dim); }
+  /* Overrides the browser default <menu>, which is a bulleted list. */
+  dialog menu {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin: 1rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .inst-channels select {
+    flex: 1 1 6rem;
+    min-width: 0;
+    padding: 0.3rem 0.45rem;
+    font: inherit;
+    font-size: 0.8rem;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 0.35rem;
+  }
+  .inst-channels label { flex: 1 1 8rem; min-width: 0; }
+  .inst-channels select:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  /* Every control in a row is live now. They still dim while a command is in flight, and for a
+     plugin that publishes no Strength — hence the cursor, and the tooltip that says which. */
+  .instances input:disabled { cursor: not-allowed; }
+  .inst-row input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .inst-channels select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .inst-error { grid-column: 1 / -1; margin: 0; font-size: 0.8rem; color: var(--bad); }
+  .inst-error[hidden] { display: none; }
+
+  #instances-empty { margin: 0; font-size: 0.875rem; color: var(--dim); }
+  #instances-empty[hidden] { display: none; }
+
+  /* Takes the place of the whole instance list when the configured plugin isn't installed — the
+     same substitution the app's own window makes, and the same sentence. Bold and red because
+     nothing else on the page can be done about it: no plugin, nothing to host. */
+  #plugin-missing {
+    margin: 0;
+    font-weight: 700;
+    color: var(--bad);
+  }
+  #plugin-missing[hidden] { display: none; }
+  /* The link inherits the red rather than going the browser's blue: it is part of the sentence,
+     not a stray navigation control. */
+  #plugin-missing a { color: inherit; }
+  #plugin-missing .where { display: block; font-weight: 400; margin-top: 0.4rem; }
+
+  /* The last row zeroes its own bottom padding, so the note needs its own separation. */
+  #instances-note { margin-top: 0.9rem; }
+
+  dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.4rem 1rem;
+    margin: 0;
+    font-size: 0.875rem;
+  }
+  dt { color: var(--dim); }
+  dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+
+  #notice {
+    border-left: 3px solid var(--warn);
+    background: color-mix(in srgb, var(--warn) 12%, transparent);
+    padding: 0.7rem 0.9rem;
+    border-radius: 0.35rem;
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+  }
+  #notice[hidden] { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>DeFeedback Host</h1>
+    <span id="link" role="status" aria-live="polite">connecting…</span>
+  </header>
+
+  <p id="notice" hidden role="alert"></p>
+
+  <section class="panel">
+    <button id="transport" type="button" disabled>—</button>
+  </section>
+
+  <section class="panel" aria-label="Processing load">
+    <p id="cpu" aria-live="polite">—</p>
+    <p class="caption" id="cpu-caption">DSP load — render time as a share of the buffer period</p>
+  </section>
+
+  <section class="panel" aria-label="Audio devices and buffer size">
+    <div class="field">
+      <label for="input-device">Input</label>
+      <select id="input-device" disabled></select>
+      <select id="input-rate" class="rate" disabled aria-label="Input sample rate"></select>
+    </div>
+    <div class="field">
+      <label for="output-device">Output</label>
+      <select id="output-device" disabled></select>
+      <select id="output-rate" class="rate" disabled aria-label="Output sample rate"></select>
+    </div>
+    <!-- One menu, not one per direction: both hardware buffers have to end up the same size. -->
+    <div class="field">
+      <label for="buffer-size">Buffer</label>
+      <select id="buffer-size" class="rate" disabled></select>
+    </div>
+    <p class="caption" id="device-note">Changeable while stopped</p>
+  </section>
+
+  <section class="panel" aria-label="Instances">
+    <div class="panel-head">
+      <h2>Instances</h2>
+      <div class="actions">
+        <span class="caption" id="instances-count">—</span>
+        <button type="button" class="small" id="instance-add" disabled>Add</button>
+      </div>
+    </div>
+    <ol class="instances" id="instances-list"></ol>
+    <p id="instances-empty" hidden>No instances loaded.</p>
+    <!-- Both the sentence and the address are written by `renderInstances` from the status
+         payload, so this page can't disagree with the app about either. -->
+    <p id="plugin-missing" hidden role="alert">
+      <span id="plugin-missing-text"></span>
+      <a class="where" id="plugin-missing-link" href="#" target="_blank" rel="noopener noreferrer"></a>
+    </p>
+    <p class="caption" id="instances-note">Changes apply immediately, running or stopped</p>
+  </section>
+
+  <section class="panel">
+    <dl>
+      <!-- No "Buffer" row any more: the menu above is now the one place the buffer size is
+           shown, and two readouts of one setting on the same page invite the question of which
+           is authoritative. -->
+      <dt>Underruns</dt><dd id="underruns">—</dd>
+      <dt>Peak</dt><dd id="peak">—</dd>
+      <dt>Instances</dt><dd id="instances">—</dd>
+    </dl>
+  </section>
+</main>
+
+<!--
+  One dialog reused for whichever row asked, rather than one per row: rows are replaced wholesale
+  whenever the set of instances changes, which would take an open dialog down with them.
+
+  `method="dialog"` makes each button's `value` the dialog's `returnValue` on close, so the choice
+  is read in one place — and Escape leaves it empty, which reads as "not confirmed" without a
+  separate cancel path. Cancel comes first in source order and carries `autofocus`, so Return
+  dismisses rather than removes.
+-->
+<dialog id="remove-dialog" aria-labelledby="remove-title">
+  <form method="dialog">
+    <h2 id="remove-title">Remove instance?</h2>
+    <p id="remove-detail"></p>
+    <p class="dialog-note" id="remove-note">
+      Its Strength and channel routing go with it. A replacement starts from the plugin's own
+      defaults.
+    </p>
+    <menu>
+      <button type="submit" value="cancel" class="small" autofocus>Cancel</button>
+      <button type="submit" value="remove" class="small remove" id="remove-confirm">Remove</button>
+    </menu>
+  </form>
+</dialog>
+
+<script>
+"use strict";
+
+// Must match WebControlService.protocolVersion. A cached page talking to a newer app should say
+// so rather than quietly misread fields.
+const PROTOCOL = 1;
+
+const el = (id) => document.getElementById(id);
+const button = el("transport");
+
+let status = null;
+let busy = false;
+
+/* Mirrors ContentView.percent(_:) exactly. Sub-1% loads are common with few instances and must
+   not round away to "0%", and a host that hasn't rendered yet must not claim a confident zero. */
+function percent(fraction) {
+  if (!Number.isFinite(fraction) || fraction <= 0) return "0%";
+  if (fraction < 0.01) return "<1%";
+  return Math.round(fraction * 100) + "%";
+}
+
+/* Rebuilds a menu only when its contents have actually changed.
+   Status arrives four times a second; replacing the <option> elements each time would collapse
+   the menu under anyone who had it open, and re-assigning .value would fight their selection. */
+const menuSignatures = {};
+
+function renderMenu(id, items, selectedValue, { empty, disabled }) {
+  const select = el(id);
+  const list = Array.isArray(items) ? items : [];
+  const signature = JSON.stringify(list);
+
+  if (menuSignatures[id] !== signature) {
+    menuSignatures[id] = signature;
+    select.replaceChildren();
+
+    if (list.length === 0) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = empty;
+      select.append(option);
+    }
+
+    for (const item of list) {
+      const option = document.createElement("option");
+      option.value = item.value;
+      option.textContent = item.label;
+      select.append(option);
+    }
+  }
+
+  // Never yank the value out from under someone mid-interaction; the next tick will catch up.
+  if (document.activeElement !== select) {
+    select.value = selectedValue === null || selectedValue === undefined
+      ? ""
+      : String(selectedValue);
+  }
+
+  select.disabled = disabled || list.length === 0;
+}
+
+function renderDeviceMenu(id, devices, selectedUID, running, missingName) {
+  const list = (devices || []).map((device) => ({
+    value: device.uid,
+    // The channel count is what tells two similarly named aggregates apart.
+    label: `${device.name} (${device.channels} ch)`
+  }));
+
+  /* A remembered device that isn't connected keeps its place in the menu, exactly as it does in
+     the app's own window: parenthesized, and with no channel count, since the count of a device
+     that isn't here isn't known. Without this the menu would show no selection at all and read
+     as though nothing had ever been chosen — which is the misreport the host stopped making. */
+  if (missingName && selectedUID) {
+    list.unshift({ value: selectedUID, label: `(${missingName})` });
+  }
+
+  // Matches the native window, where both pickers are disabled for the whole session: changing
+  // either device means rebuilding the I/O units.
+  renderMenu(id, list, selectedUID, { empty: "No devices", disabled: busy || running });
+}
+
+function renderRateMenu(id, rates, selectedRate, running, matched) {
+  // Rates come back as doubles (44100.0); they are whole hertz in every menu the HAL offers, and
+  // rounding here keeps the option value byte-identical to what gets POSTed back.
+  const list = (rates || []).map((rate) => ({
+    value: Math.round(rate),
+    label: `${Math.round(rate)} Hz`
+  }));
+
+  renderMenu(id, list, selectedRate === null || selectedRate === undefined
+    ? null
+    : Math.round(selectedRate), { empty: "—", disabled: busy || running });
+
+  el(id).classList.toggle("mismatch", !matched && list.length > 0);
+}
+
+/* One submit path for both device and rate menus.
+   `revert` reads the value the host actually holds, so a refusal leaves the menu showing what is
+   really selected rather than a choice that never took. */
+async function submitSelection(id, endpoint, direction, value, revert) {
+  const select = el(id);
+
+  busy = true;
+  select.disabled = true;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [direction]: value })
+    });
+
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      notice(body.error || ("Request failed: " + response.status));
+      const previous = revert(status);
+      select.value = previous === null || previous === undefined ? "" : String(previous);
+    } else {
+      status = body;
+      notice("");
+    }
+  } catch (error) {
+    notice("Couldn't reach the host: " + error.message);
+  } finally {
+    busy = false;
+    render();
+  }
+}
+
+function selectDevice(id, direction) {
+  const uid = el(id).value;
+  if (!uid) return;
+  return submitSelection(id, "/api/devices", direction, uid,
+    (s) => (direction === "input" ? s.inputDeviceUID : s.outputDeviceUID));
+}
+
+/* The offered sizes come from the host rather than being hardcoded, so this page can't offer one
+   the host refuses — the same rule the instance cap follows.
+
+   Unlike a sample rate, a size the *devices* won't take is still accepted here, exactly as the
+   native picker accepts it: the host reports it through `bufferSizeAccepted` and blocks Run with a
+   reason naming the device. Refusing it outright would also make it impossible to set a size
+   before selecting the interface that supports it. */
+function renderBufferMenu(size, sizes, running, accepted) {
+  const list = (sizes || []).map((frames) => ({
+    value: frames,
+    // The unit lives in the option text now that the diagnostics row that carried it is gone.
+    label: `${frames} frames`
+  }));
+
+  renderMenu("buffer-size", list, size, { empty: "—", disabled: busy || running });
+  // Marked the way a mismatched rate menu is, so the blocked reason at the top has a control to
+  // point at.
+  el("buffer-size").classList.toggle("mismatch", !accepted && list.length > 0);
+}
+
+function selectBufferSize() {
+  const frames = Number(el("buffer-size").value);
+  if (!Number.isInteger(frames) || frames <= 0) return;
+  return submitSelection("buffer-size", "/api/buffer-size", "bufferSize", frames,
+    (s) => s.bufferSize);
+}
+
+/* The 202 here does NOT mean the hardware took the rate: the host pushes it at the HAL and polls
+   for up to two seconds, because rate changes aren't synchronous. If the device refuses, the
+   host's error and the corrected menu arrive on the next status event. */
+function selectRate(id, direction) {
+  const hz = Number(el(id).value);
+  if (!Number.isFinite(hz) || hz <= 0) return;
+  return submitSelection(id, "/api/sample-rate", direction, hz,
+    (s) => {
+      const rate = direction === "input" ? s.inputSampleRate : s.outputSampleRate;
+      return rate === null || rate === undefined ? null : Math.round(rate);
+    });
+}
+
+/* ---- Instances -------------------------------------------------------------------------- */
+
+/* Matches `InstanceName.maxLength` in the host. */
+const NAME_MAX_LENGTH = 32;
+
+function element(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+/* One row: every control in it is live, and each carries the API field name it sets in
+   `data-key`, so the one delegated `change` handler posts what it reads rather than translating
+   a label back into a field name.
+
+   Every handler on the row is delegated from the list, so the row itself carries the instance's
+   id — its position won't do, because a row's index shifts the moment anything ahead of it goes,
+   and a click can land after the list has moved underneath it. */
+function instanceRow() {
+  const row = element("li");
+
+  const remove = element("button", "small remove", "Remove");
+  remove.type = "button";
+
+  // The instance's unique name, which is also its id in the API. Editable; committed on `change`
+  // (Enter or leaving the field) through the same PATCH as every other control.
+  const nameBox = element("label", "inst-name");
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.dataset.key = "name";
+  nameInput.spellcheck = false;
+  nameInput.autocomplete = "off";
+  nameInput.title = "A unique name for this instance (up to " + NAME_MAX_LENGTH +
+    " characters). The API uses it as the instance's id.";
+  nameBox.append(element("span", "inst-caption", "Name"), nameInput,
+                 element("span", "inst-plugin"));
+  row.append(nameBox, element("span", "inst-index"), remove);
+
+  const strengthRow = element("div", "inst-row");
+  const strengthLabel = element("label");
+  strengthLabel.append(element("span", "inst-caption", "Strength"));
+
+  const slider = document.createElement("input");
+  slider.type = "range";
+  slider.min = "0";
+  slider.max = "100";
+  slider.step = "1";
+  strengthLabel.append(slider);
+
+  strengthRow.append(strengthLabel, element("output", "inst-strength"));
+  row.append(strengthRow);
+
+  const channelRow = element("div", "inst-row inst-channels");
+  // The key is the one the API uses, so the change handler posts what it reads rather than
+  // translating a label back into a field name.
+  for (const [name, key] of [["In", "inputChannel"], ["Out", "outputChannel"]]) {
+    const label = element("label");
+    const menu = document.createElement("select");
+    menu.dataset.key = key;
+    label.append(element("span", "inst-caption", name), menu);
+    channelRow.append(label);
+  }
+  row.append(channelRow);
+
+  // The two come from different places, which the tooltips say because the row has no space to:
+  // Mute is the plugin's own parameter, Bypass is the host's routing.
+  const toggleRow = element("div", "inst-row inst-toggles");
+  const toggles = [
+    ["Mute", "The plugin's own Mute — the same control the app's window and the plugin's UI show",
+     "muted"],
+    ["Bypass", "Host bypass — input is wired straight to output and the plugin isn't called",
+     "bypassed"]
+  ];
+  for (const [name, help, key] of toggles) {
+    const label = element("label");
+    label.title = help;
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.dataset.key = key;
+    label.append(box, element("span", "inst-caption", name));
+    toggleRow.append(label);
+  }
+  row.append(toggleRow);
+
+  const error = element("p", "inst-error");
+  error.hidden = true;
+  row.append(error);
+
+  return row;
+}
+
+/* The control the pointer is currently held down on, or null.
+
+   Focus is not a usable stand-in for this. macOS browsers do not reliably focus a range input when
+   you click it, so `document.activeElement` can still be <body> in the middle of a drag — and the
+   status stream, arriving four times a second, would then write the host's value straight over the
+   thumb while the user is still holding it. Tracked explicitly instead.
+
+   Focus is still checked as well, because it is the right signal for the keyboard: arrow keys move
+   a focused slider with no pointer involved. */
+let heldControl = null;
+
+/* Whether the user, rather than the host, currently owns this control's value. */
+function userOwns(control) {
+  return control === heldControl || document.activeElement === control;
+}
+
+/* Channel menus are per-row, so they can't use `renderMenu`, which keys its cache on element id.
+   The signature is the channel count plus any out-of-range channel, since that adds an option. */
+function fillChannelMenu(menu, count, selected) {
+  const known = Number.isInteger(selected);
+  const inRange = known && selected >= 0 && selected < count;
+  const signature = count + (inRange ? "" : ":" + selected);
+
+  if (menu.dataset.signature !== signature) {
+    menu.dataset.signature = signature;
+    menu.replaceChildren();
+
+    /* A routing the selected device can't satisfy is remembered rather than clamped, so it gets
+       its own parenthesized entry — the same one the app's window shows — and keeps it until
+       another channel is picked. The host leaves that one link unwired meanwhile; it doesn't
+       block Run, and the routing comes back the moment the device does. */
+    if (!inRange) {
+      const option = document.createElement("option");
+      option.value = known ? String(selected) : "";
+      option.textContent = known ? "(Channel " + (selected + 1) + ")" : "—";
+      menu.append(option);
+    }
+    for (let channel = 0; channel < count; channel += 1) {
+      const option = document.createElement("option");
+      option.value = String(channel);
+      option.textContent = "Channel " + (channel + 1);
+      menu.append(option);
+    }
+  }
+
+  // Never yank the value out from under someone mid-interaction, the same rule `renderMenu`
+  // follows. Status arrives four times a second, and this menu is now something you can change.
+  if (userOwns(menu)) return;
+
+  menu.value = known ? String(selected) : "";
+}
+
+function updateRow(row, instance, inputChannels, outputChannels) {
+  const nameInput = row.querySelector(".inst-name input");
+  // Same rule as the other controls: never overwrite a name the user is in the middle of typing.
+  if (!userOwns(nameInput)) {
+    nameInput.value = instance.id || "";
+  }
+  nameInput.disabled = busy || !instance.id;
+  row.querySelector(".inst-plugin").textContent = instance.pluginName || "Audio Unit";
+  row.querySelector(".inst-index").textContent = "#" + ((instance.index ?? 0) + 1);
+
+  // Every handler on this row is delegated from the list and finds its target by walking up to
+  // here, so the id lives on the row rather than on any one control.
+  row.dataset.id = instance.id || "";
+
+  const remove = row.querySelector("button.remove");
+  remove.disabled = busy || !instance.id;
+  remove.title = "Remove " + (instance.id || "this instance") + " from the host";
+
+  // A plugin publishing no Strength parameter must not show a slider parked at zero as though
+  // that were its setting — and must not offer one that can only be refused.
+  const known = typeof instance.strength === "number";
+  const slider = row.querySelector("input[type=range]");
+  slider.disabled = busy || !known || !instance.id;
+  slider.title = known
+    ? "The plugin's own Strength parameter"
+    : "This plugin publishes no Strength parameter";
+
+  // Same rule as the channel menus: a drag in progress owns the control until it ends.
+  if (!userOwns(slider)) {
+    slider.value = known ? String(instance.strength) : "0";
+    row.querySelector(".inst-strength").textContent = known ? instance.strength + "%" : "—";
+  }
+
+  const menus = row.querySelectorAll(".inst-channels select");
+  fillChannelMenu(menus[0], inputChannels, instance.inputChannel);
+  fillChannelMenu(menus[1], outputChannels, instance.outputChannel);
+  menus[0].disabled = busy || inputChannels === 0 || !instance.id;
+  menus[1].disabled = busy || outputChannels === 0 || !instance.id;
+
+  // No `userOwns` guard on these: a checkbox commits the instant it is clicked, so there is no
+  // in-between state for the stream to trample the way there is mid-drag on a slider.
+  const boxes = row.querySelectorAll("input[type=checkbox]");
+  boxes[0].checked = instance.muted === true;
+  boxes[1].checked = instance.bypassed === true;
+  boxes[0].disabled = busy || !instance.id;
+  boxes[1].disabled = busy || !instance.id;
+
+  const error = row.querySelector(".inst-error");
+  error.textContent = instance.error || "";
+  error.hidden = !instance.error;
+}
+
+/* Rows are rebuilt only when the set of instances changes, not on every status event: four DOM
+   rebuilds a second to redraw values that mostly haven't moved is waste, and it would reset any
+   selection or focus inside the list. Values are updated in place. */
+let instanceSignature = null;
+
+/* With no plugin registered there is nothing for this panel to list and nothing its buttons could
+   usefully do, so the list, the count, Add and the note all go and the notice takes their place —
+   the same substitution the app's own window makes with its gallery.
+
+   The heading stays: a panel that empties itself completely reads as a page that failed to load.
+
+   The wording and the address come from the status payload rather than being written here, so a
+   host repointed at another effect says the right thing on the page too. The fallbacks below are
+   for a payload from an older app that doesn't send them, which would otherwise show a blank
+   panel — the one outcome worse than saying too little. */
+function renderMissingPlugin(state) {
+  const missing = state.pluginInstalled === false;
+
+  el("plugin-missing").hidden = !missing;
+  el("instances-list").hidden = missing;
+  el("instances-note").hidden = missing;
+  el("instances-count").hidden = missing;
+  el("instance-add").hidden = missing;
+
+  if (missing) {
+    el("plugin-missing-text").textContent =
+      state.pluginMessage || "The plugin is not installed. Please install it.";
+
+    const link = el("plugin-missing-link");
+    link.textContent = state.pluginURL || "";
+    link.href = state.pluginURL || "#";
+    link.hidden = !state.pluginURL;
+  }
+
+  return missing;
+}
+
+function renderInstances(state) {
+  const instances = Array.isArray(state.instances) ? state.instances : [];
+  const container = el("instances-list");
+  const signature = JSON.stringify(instances.map((instance) => instance.id ?? instance.index));
+
+  if (instanceSignature !== signature) {
+    instanceSignature = signature;
+    container.replaceChildren(...instances.map(() => instanceRow()));
+  }
+
+  const inputChannels = state.inputChannelCount ?? 0;
+  const outputChannels = state.outputChannelCount ?? 0;
+  instances.forEach((instance, index) =>
+    updateRow(container.children[index], instance, inputChannels, outputChannels));
+
+  // The cap comes from the host rather than being hardcoded here, and it's shown rather than
+  // only enforced — a button that greys out with no explanation reads as a fault.
+  const max = state.maxInstanceCount;
+  const capped = Number.isInteger(max) && instances.length >= max;
+  const missing = renderMissingPlugin(state);
+
+  el("instances-empty").hidden = missing || instances.length > 0;
+  el("instances-count").textContent = Number.isInteger(max)
+    ? instances.length + " of " + max
+    : instances.length + " loaded";
+
+  const add = el("instance-add");
+  // Disabled as well as hidden: the host refuses an add with no plugin, and a control that is
+  // only invisible is still reachable by keyboard.
+  add.disabled = busy || capped || missing;
+  add.title = capped
+    ? "The host is limited to " + max + " instances"
+    : "Load another instance of the configured Audio Unit";
+
+  /* An instance can go while its dialog is still open: the app's own window can remove it, and so
+     can another browser watching the same host. Said inside the dialog rather than closing it — a
+     dialog that vanishes as you reach for it is worse than one that explains itself — and Remove
+     is disabled, so Cancel is the only thing left to press. */
+  if (pendingRemoval && !instances.some((instance) => instance.id === pendingRemoval)) {
+    pendingRemoval = null;
+    el("remove-detail").textContent = "That instance has already been removed.";
+    el("remove-note").hidden = true;
+    el("remove-confirm").disabled = true;
+  }
+}
+
+/* The id the open dialog is about, or null when nothing is pending.
+
+   Held here rather than on the dialog element or the row: the row is replaced wholesale whenever
+   the set of instances changes, which includes the moment the removal it asked for succeeds. */
+let pendingRemoval = null;
+
+/* Asks before removing, rather than removing on the click. Nothing is sent from here.
+
+   The id is captured now and the request carries that id, never the row's position — a row's index
+   shifts the moment anything ahead of it goes, and this dialog stays open for as long as the
+   reader takes. */
+function askToRemove(id) {
+  const instance = (status.instances || []).find((each) => each.id === id);
+  if (!instance) return;
+
+  pendingRemoval = id;
+
+  const dialog = el("remove-dialog");
+  // All three reset, because `returnValue` survives from the previous opening and the other two
+  // may have been left in the "already removed" state by an earlier dialog.
+  dialog.returnValue = "";
+  el("remove-confirm").disabled = false;
+  el("remove-note").hidden = false;
+  el("remove-detail").textContent =
+    (instance.id || "This instance") + " (#" + ((instance.index ?? 0) + 1) + ", " +
+    (instance.pluginName || "Audio Unit") + ")";
+
+  dialog.showModal();
+}
+
+/* Add and remove are two routes — POST /api/instances and DELETE /api/instances/{id} — but they
+   share everything around the request, so they share this. Both answer with a fresh status
+   snapshot; the add also carries a `Location` naming what it made, which this page has no use for
+   since the new instance is in the snapshot already.
+
+   `busy` disables the whole panel meanwhile, which matters more here than for the other
+   commands — the plugin is instantiated out of process, so an add takes a noticeable moment, and
+   an impatient second click would load an instance nobody asked for. */
+async function instanceCommand(path, method) {
+  if (busy) return;
+
+  busy = true;
+  render();
+
+  try {
+    const response = await fetch(path, {
+      method,
+      // The POST carries no body, but the content type is still required by the server, and it is
+      // the CSRF defence: a cross-site form post can't set it. The DELETE needs no such header —
+      // a form can't issue the method at all.
+      headers: method === "POST" ? { "Content-Type": "application/json" } : {}
+    });
+
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      notice(body.error || ("Request failed: " + response.status));
+    } else {
+      status = body;
+      notice("");
+    }
+  } catch (error) {
+    notice("Couldn't reach the host: " + error.message);
+  } finally {
+    busy = false;
+    render();
+  }
+}
+
+/* Changes one instance's Strength or one of its channels.
+
+   The control is deliberately *not* disabled for the duration. Disabling blurs it, and these fire
+   `change` on every arrow key as well as on pointer release — so a keyboard user would lose focus
+   after the first press and the second would go nowhere. `busy` is what prevents a second request
+   overlapping; no render runs while it is set, so nothing overwrites the control meanwhile.
+
+   A refusal therefore has to put the value back by hand: `render()` in the `finally` won't do it,
+   because a control the user still owns is exactly what `updateRow` refuses to touch. */
+async function submitInstanceSetting(row, control, key, value) {
+  if (busy) return;
+
+  const id = row.dataset.id;
+  if (!id) return;
+
+  busy = true;
+
+  try {
+    const response = await fetch("/api/instances/" + encodeURIComponent(id), {
+      // A partial update of one instance: only the field being changed is sent, so nothing else
+      // can be clobbered by a stale copy of the row.
+      method: "PATCH",
+      // Required by the server, and the CSRF defence: a cross-site form post can't set it.
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [key]: value })
+    });
+
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      notice(body.error || ("Request failed: " + response.status));
+      revertInstanceControl(row, control, id, key);
+    } else {
+      status = body;
+      notice("");
+    }
+  } catch (error) {
+    notice("Couldn't reach the host: " + error.message);
+    revertInstanceControl(row, control, id, key);
+  } finally {
+    busy = false;
+    render();
+  }
+}
+
+/* Puts a control back to what the host actually holds, after a change it refused.
+
+   A checkbox is the case that makes this necessary rather than merely tidy: clicking one flips it
+   immediately, so a refusal that left it alone would show the instance muted when it isn't. */
+function revertInstanceControl(row, control, id, key) {
+  const instance = (status.instances || []).find((each) => each.id === id);
+  // The name is reported as the instance's `id`, not under the key it's written with.
+  const actual = instance ? instance[key === "name" ? "id" : key] : null;
+
+  if (control.type === "checkbox") {
+    control.checked = actual === true;
+    return;
+  }
+
+  control.value = actual === null || actual === undefined ? "" : String(actual);
+  if (key === "strength") {
+    row.querySelector(".inst-strength").textContent =
+      typeof actual === "number" ? actual + "%" : "—";
+  }
+}
+
+function notice(message) {
+  const box = el("notice");
+  box.textContent = message || "";
+  box.hidden = !message;
+}
+
+function setLink(state, text) {
+  const link = el("link");
+  link.className = state;
+  link.textContent = text;
+}
+
+function render() {
+  if (!status) return;
+
+  const running = status.running === true;
+
+  button.textContent = running ? "Stop" : "Run";
+  button.classList.toggle("running", running);
+  // Stop is never blocked, matching the native window: if a device is reconfigured underneath a
+  // running session, refusing to stop would leave no way out.
+  button.disabled = busy || (!running && !status.canStart);
+
+  if (!running) {
+    el("cpu").textContent = "—";
+    el("cpu").className = "";
+    el("cpu-caption").textContent = status.blockedReason
+      || "Stopped";
+  } else if (!status.hasRendered) {
+    el("cpu").textContent = "—";
+    el("cpu").className = "";
+    el("cpu-caption").textContent = "Waiting for the output device's first callback";
+  } else {
+    el("cpu").textContent = percent(status.dspLoad);
+    // Same thresholds as the native readout: a callback averaging over 80% of its budget is
+    // already close to overrunning on peaks.
+    el("cpu").className = status.realtime === false
+      ? "bad"
+      : (status.underruns > 0 || status.dspLoad > 0.8 ? "warn" : "");
+    el("cpu-caption").textContent = status.realtime === false
+      ? "NOT REALTIME — audio work is off a realtime thread"
+      : "DSP load — render time as a share of the buffer period";
+  }
+
+  renderDeviceMenu("input-device", status.inputDevices, status.inputDeviceUID, running,
+                   status.inputDeviceMissing ? (status.inputDevice || status.inputDeviceUID) : null);
+  renderDeviceMenu("output-device", status.outputDevices, status.outputDeviceUID, running,
+                   status.outputDeviceMissing ? (status.outputDevice || status.outputDeviceUID) : null);
+
+  const matched = status.sampleRatesMatch !== false;
+  renderRateMenu("input-rate", status.inputSampleRates, status.inputSampleRate, running, matched);
+  renderRateMenu("output-rate", status.outputSampleRates, status.outputSampleRate, running, matched);
+
+  const bufferAccepted = status.bufferSizeAccepted !== false;
+  renderBufferMenu(status.bufferSize, status.bufferSizeChoices, running, bufferAccepted);
+
+  el("device-note").textContent = running
+    ? "Stop to change devices or the buffer size — both rebuild the audio units"
+    : (matched
+       ? "Changeable while stopped"
+       : "Input and output must run at the same rate before the host can start");
+
+  renderInstances(status);
+
+  el("underruns").textContent = status.underruns ?? "—";
+  el("peak").textContent = status.hasRendered ? percent(status.peakDspLoad) : "—";
+  // No "Sample rate" row: the two menus above carry it per direction, and a single figure here
+  // could only show one of them when they differ — which is exactly when it matters. Buffer size
+  // is likewise now shown by its own menu rather than twice.
+  el("instances").textContent = status.instanceCount ?? "—";
+
+  if (status.error) {
+    notice(status.error);
+  } else if (!running && status.blockedReason) {
+    notice(status.blockedReason);
+  } else {
+    notice("");
+  }
+}
+
+el("instance-add").addEventListener("click", () => instanceCommand("/api/instances", "POST"));
+
+/* All three row handlers are delegated, because rows are replaced whenever the set of instances
+   changes and per-row listeners would have to be re-attached every time. */
+
+el("instances-list").addEventListener("click", (event) => {
+  const row = event.target.closest("li");
+  if (!row || !event.target.closest("button.remove") || !row.dataset.id) return;
+  askToRemove(row.dataset.id);
+});
+
+/* One place reads the outcome, whichever way the dialog was dismissed: Cancel and Remove set
+   `returnValue` from their own `value`, and Escape or the backdrop leaves it empty. Anything that
+   isn't "remove" is a no-op, which is the safe direction for the default to fall. */
+el("remove-dialog").addEventListener("close", (event) => {
+  const id = pendingRemoval;
+  pendingRemoval = null;
+  if (event.target.returnValue !== "remove" || !id) return;
+  // Encoded rather than interpolated raw: ids are user-chosen names, so spaces and non-ASCII
+  // characters are expected.
+  instanceCommand("/api/instances/" + encodeURIComponent(id), "DELETE");
+});
+
+/* Claim the control for the duration of a press, so the status stream leaves it alone. See
+   `heldControl` — this is tracked rather than inferred from focus because clicking a range input
+   does not reliably focus it on macOS.
+
+   Released on `window`, not on the list: a drag that ends with the pointer outside the slider —
+   which is most of them, once you're past either end — fires its `pointerup` somewhere else
+   entirely, and missing it would strand the control as permanently held. */
+el("instances-list").addEventListener("pointerdown", (event) => {
+  const control = event.target.closest("input[type=range], .inst-channels select");
+  if (control) heldControl = control;
+});
+
+window.addEventListener("pointerup", () => { heldControl = null; });
+window.addEventListener("pointercancel", () => { heldControl = null; });
+
+/* `input` fires continuously through a drag, `change` only when it ends. The readout follows the
+   thumb so the drag has feedback, but nothing is sent until the user lets go — at 60 events a
+   second a request per frame would queue up behind itself and arrive out of order. */
+el("instances-list").addEventListener("input", (event) => {
+  // Name: drop the characters the host refuses (control characters and "/") and cap the length as
+  // it's typed. The host still validates — this just keeps obvious refusals from being sent.
+  const nameInput = event.target.closest(".inst-name input");
+  if (nameInput) {
+    const cleaned = Array.from(nameInput.value.replace(/[\p{Cc}\/]/gu, ""))
+      .slice(0, NAME_MAX_LENGTH).join("");
+    if (cleaned !== nameInput.value) nameInput.value = cleaned;
+    return;
+  }
+
+  const slider = event.target.closest("input[type=range]");
+  if (!slider) return;
+  slider.closest("li").querySelector(".inst-strength").textContent = slider.value + "%";
+});
+
+el("instances-list").addEventListener("change", (event) => {
+  const row = event.target.closest("li");
+  if (!row) return;
+
+  const nameInput = event.target.closest(".inst-name input");
+  if (nameInput) {
+    const proposed = nameInput.value.trim();
+    if (proposed === row.dataset.id) {
+      nameInput.value = proposed;
+      return;
+    }
+    submitInstanceSetting(row, nameInput, "name", proposed);
+    return;
+  }
+
+  const slider = event.target.closest("input[type=range]");
+  if (slider) {
+    submitInstanceSetting(row, slider, "strength", Number(slider.value));
+    return;
+  }
+
+  const menu = event.target.closest(".inst-channels select");
+  if (menu && menu.value !== "") {
+    submitInstanceSetting(row, menu, menu.dataset.key, Number(menu.value));
+    return;
+  }
+
+  const box = event.target.closest("input[type=checkbox]");
+  if (box) {
+    submitInstanceSetting(row, box, box.dataset.key, box.checked);
+  }
+});
+
+el("input-device").addEventListener("change", () => selectDevice("input-device", "input"));
+el("output-device").addEventListener("change", () => selectDevice("output-device", "output"));
+el("input-rate").addEventListener("change", () => selectRate("input-rate", "input"));
+el("output-rate").addEventListener("change", () => selectRate("output-rate", "output"));
+el("buffer-size").addEventListener("change", selectBufferSize);
+
+button.addEventListener("click", async () => {
+  if (!status || busy) return;
+
+  busy = true;
+  button.disabled = true;
+
+  try {
+    const response = await fetch("/api/system", {
+      method: "POST",
+      // Required by the server. It's also the CSRF defence — a cross-site form post can't set it.
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ running: !status.running })
+    });
+
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      notice(body.error || ("Request failed: " + response.status));
+    } else {
+      // The 202 carries a fresh snapshot, so the button flips without waiting for the next event.
+      status = body;
+      notice("");
+    }
+  } catch (error) {
+    notice("Couldn't reach the host: " + error.message);
+  } finally {
+    busy = false;
+    render();
+  }
+});
+
+/* EventSource reconnects by itself — the server sends a `retry:` hint as the stream opens — so
+   there is no reconnect logic here beyond reporting the gap. */
+function connect() {
+  const source = new EventSource("/api/events");
+
+  source.addEventListener("open", () => setLink("live", "connected"));
+
+  source.addEventListener("status", (event) => {
+    setLink("live", "connected");
+    try {
+      const next = JSON.parse(event.data);
+      if (next.protocol !== PROTOCOL) {
+        notice("This page is out of date with the app. Reload to pick up the new version.");
+        return;
+      }
+      status = next;
+      // Kept, but not drawn, while a command is in flight. The 202 carries its own snapshot and
+      // renders on arrival; drawing this one first would briefly show the pre-command state — and
+      // for the per-instance controls it would overwrite the value the user just set with the one
+      // the host held a moment ago, which is the bounce this pair of guards exists to stop.
+      if (!busy) render();
+    } catch (error) {
+      notice("Couldn't read a status update: " + error.message);
+    }
+  });
+
+  source.addEventListener("error", () => {
+    // readyState CONNECTING means it is already retrying; CLOSED means it gave up.
+    setLink("lost", source.readyState === EventSource.CLOSED ? "disconnected" : "reconnecting…");
+    button.disabled = true;
+  });
+}
+
+connect();
+</script>
+</body>
+</html>
