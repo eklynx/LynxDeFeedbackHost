@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		9B45F203307C3293002C2A5F /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 9B45F202307C328B002C2A5F /* LICENSE */; };
 		9B7EDE463076373B00860000 /* com.eklynx.sound.defeedback.streamDeckPlugin in Copy Stream Deck Plugin in to application  bundle */ = {isa = PBXBuildFile; fileRef = 9B7EDE453076371600860000 /* com.eklynx.sound.defeedback.streamDeckPlugin */; };
 		9BD3C6523062178E00E7158D /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 9BD3C62D3062178E00E7158D /* README.md */; };
 /* End PBXBuildFile section */
@@ -29,6 +30,14 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		9B1A5E0130A0000000000001 /* Copy Launch Agent in to application bundle */ = {
+			isa = PBXCopyFilesBuildPhase;
+			dstPath = Contents/Library/LaunchAgents;
+			dstSubfolder = Wrapper;
+			files = (
+			);
+			name = "Copy Launch Agent in to application bundle";
+		};
 		9B7EDE44307636EB00860000 /* Copy Stream Deck Plugin in to application  bundle */ = {
 			isa = PBXCopyFilesBuildPhase;
 			dstPath = "";
@@ -50,6 +59,7 @@
 		9B407F05306B468800F40C76 /* mute.svg */ = {isa = PBXFileReference; lastKnownFileType = text; path = mute.svg; sourceTree = "<group>"; };
 		9B407F07306B468800F40C76 /* strength_key.svg */ = {isa = PBXFileReference; lastKnownFileType = text; path = strength_key.svg; sourceTree = "<group>"; };
 		9B407F09306B469E00F40C76 /* DeFeedbackHostLogo.svg */ = {isa = PBXFileReference; lastKnownFileType = text; path = DeFeedbackHostLogo.svg; sourceTree = "<group>"; };
+		9B45F202307C328B002C2A5F /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		9B7EDE453076371600860000 /* com.eklynx.sound.defeedback.streamDeckPlugin */ = {isa = PBXFileReference; lastKnownFileType = file; path = com.eklynx.sound.defeedback.streamDeckPlugin; sourceTree = "<group>"; };
 		9B928132305B937A003DD310 /* DeFeedbackHost.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DeFeedbackHost.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9B92813F305B937B003DD310 /* DeFeedbackHostTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DeFeedbackHostTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -91,9 +101,33 @@
 		9BD3DF6F306339DA00E7158D /* tsconfig.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = tsconfig.json; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		9B1A5E0130A0000000000003 /* Exceptions for "DeFeedbackHost" folder in "DeFeedbackHost" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				com.eklynx.sound.DeFeedbackHost.plist,
+			);
+			target = 9B928131305B937A003DD310 /* DeFeedbackHost */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		9B1A5E0130A0000000000002 /* Exceptions for "DeFeedbackHost" folder in "Copy Launch Agent in to application bundle" phase from "DeFeedbackHost" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = 9B1A5E0130A0000000000001 /* Copy Launch Agent in to application bundle */;
+			membershipExceptions = (
+				com.eklynx.sound.DeFeedbackHost.plist,
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		9B928134305B937A003DD310 /* DeFeedbackHost */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				9B1A5E0130A0000000000003 /* Exceptions for "DeFeedbackHost" folder in "DeFeedbackHost" target */,
+				9B1A5E0130A0000000000002 /* Exceptions for "DeFeedbackHost" folder in "Copy Launch Agent in to application bundle" phase from "DeFeedbackHost" target */,
+			);
 			path = DeFeedbackHost;
 			sourceTree = "<group>";
 		};
@@ -160,6 +194,7 @@
 				9B92814C305B937B003DD310 /* DeFeedbackHostUITests */,
 				9BD3C6673062548D00E7158D /* openapi.yaml */,
 				9BD3C62D3062178E00E7158D /* README.md */,
+				9B45F202307C328B002C2A5F /* LICENSE */,
 				9BB5FF0E307962BC00A25948 /* docs */,
 				9BD3DF70306339DA00E7158D /* streamdeck */,
 				9B928133305B937A003DD310 /* Products */,
@@ -316,6 +351,7 @@
 				9B928130305B937A003DD310 /* Resources */,
 				9B7EDE473076A46300860000 /* Build Stream Deck Plugin */,
 				9B7EDE44307636EB00860000 /* Copy Stream Deck Plugin in to application  bundle */,
+				9B1A5E0130A0000000000001 /* Copy Launch Agent in to application bundle */,
 				9B91D9F6307821EF00641951 /* Create DMG */,
 				9B91D9F73078223A00641951 /* Notorize DMG */,
 			);
@@ -420,6 +456,7 @@
 			isa = PBXResourcesBuildPhase;
 			files = (
 				9BD3C6523062178E00E7158D /* README.md in Resources */,
+				9B45F203307C3293002C2A5F /* LICENSE in Resources */,
 			);
 		};
 		9B92813D305B937B003DD310 /* Resources */ = {

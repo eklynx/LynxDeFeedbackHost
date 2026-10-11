@@ -6,6 +6,19 @@
 //
 
 import SwiftUI
+import ServiceManagement
+import os
+
+
+extension Logger {
+    private static var subsystem = Bundle.main.bundleIdentifier ?? "com.eklynx.sound.DeFeedbackHost"
+
+    static let ui = Logger(subsystem: subsystem, category: "UI")
+    static let host_application = Logger(subsystem: subsystem, category: "HostApp")
+    static let audio = Logger(subsystem: subsystem, category: "Audio")
+    static let webserver = Logger(subsystem: subsystem, category: "WebServer")
+}
+
 
 @main
 struct DeFeedbackHostApp: App {
@@ -52,5 +65,25 @@ struct DeFeedbackHostApp: App {
                 }
             }
         }
+    }
+
+    static let agent = SMAppService.agent(plistName: "com.eklynx.sound.DeFeedbackHost.plist")
+
+    // Sets or unsets the launch agent that auto-starts the application.
+    static func SetLaunchDaemonState(active: Bool) throws {
+        do {
+            if active {
+                try agent.register()
+            } else {
+                try agent.unregister()
+            }
+        } catch {
+            Logger.host_application.error("Error registering/unregistering launch agent: \(error)")
+            throw error
+        }
+    }
+
+    static func GetLaunchDaemonState() -> SMAppService.Status {
+            return agent.status
     }
 }

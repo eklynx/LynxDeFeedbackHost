@@ -10,7 +10,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.eklynx.sound.DeFeedbackHost-restart</string>
+    <string>com.eklynx.sound.DeFeedbackHost</string>
     <key>LimitLoadToSessionType</key>
     <string>Aqua</string>
     <key>KeepAlive</key>
@@ -22,11 +22,7 @@
     </dict>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/bin/open</string>
-        <string>-g</string>
-        <string>-W</string>
-        <string>-b</string>
-        <string>com.eklynx.sound.DeFeedbackHost</string>
+        <string>/Applications/DeFeedbackHost.app/Contants/MacOS/DeFeedbackHost</string>
     </array>
 
 </dict>
