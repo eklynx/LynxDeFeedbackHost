@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+   com.eklynx.sound.defeedbackhost.plist
+   DeFeedbackHost
+
+   Created by Edgars Klepers on 10/10/26.
+   Copyright (c) 2026 EKLynx Software. All rights reserved.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.eklynx.sound.DeFeedbackHost-restart</string>
+    <key>LimitLoadToSessionType</key>
+    <string>Aqua</string>
+    <key>KeepAlive</key>
+    <dict>
+        <key>Crashed</key>
+        <true/>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/open</string>
+        <string>-g</string>
+        <string>-W</string>
+        <string>-b</string>
+        <string>com.eklynx.sound.DeFeedbackHost</string>
+    </array>
+
+</dict>
+</plist>
