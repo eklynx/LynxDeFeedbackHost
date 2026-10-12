@@ -349,6 +349,7 @@
 				9B92812E305B937A003DD310 /* Sources */,
 				9B92812F305B937A003DD310 /* Frameworks */,
 				9B928130305B937A003DD310 /* Resources */,
+				9BE98B0B307D7C610019FC4F /* Set Build Number */,
 				9B7EDE473076A46300860000 /* Build Stream Deck Plugin */,
 				9B7EDE44307636EB00860000 /* Copy Stream Deck Plugin in to application  bundle */,
 				9B1A5E0130A0000000000001 /* Copy Launch Agent in to application bundle */,
@@ -607,6 +608,19 @@
 				"spctl --assess --type open --context context:primary-signature --verbose=2 \"${DMG_PATH}\"",
 				"",
 				"echo \"Created ${DMG_PATH}\"",
+				"",
+			);
+		};
+		9BE98B0B307D7C610019FC4F /* Set Build Number */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			inputPaths = (
+				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
+			);
+			name = "Set Build Number";
+			shellPath = /bin/sh;
+			shellScript = (
+				"sh \"${SRCROOT}/scripts/set-build-number.sh\"",
 				"",
 			);
 		};
