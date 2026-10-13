@@ -12,6 +12,7 @@ import AudioToolbox
 import CoreAudio
 import Foundation
 import Synchronization
+import ServiceManagement
 
 enum AudioHostError: LocalizedError {
     case pluginNotInstalled
@@ -473,7 +474,51 @@ final class AudioHost {
         return names
     }
 
-    
+
+    // MARK: - Launch at login
+
+    private(set) var launchAgentStatus: SMAppService.Status = .notRegistered
+
+    let isInApplicationsFolder = AudioHost.isInApplicationsFolder(Bundle.main.bundleURL)
+
+    nonisolated static func isInApplicationsFolder(_ bundleURL: URL) -> Bool {
+        bundleURL.standardizedFileURL.resolvingSymlinksInPath().path.hasPrefix("/Applications/")
+    }
+
+    var launchWithSystem: Bool {
+        get { launchAgentStatus == .enabled || launchAgentStatus == .requiresApproval }
+        set {
+            if newValue && !isInApplicationsFolder {
+                errorMessage = "DeFeedbackHost must be in /Applications for auto-launch to be enabled." // TODO: localize string
+                refreshLaunchAgentStatus()
+                return
+            }
+            var failure: Error?
+            do {
+                try DeFeedbackHostApp.SetLaunchDaemonState(active: newValue)
+            } catch {
+                failure = error
+            }
+
+            refreshLaunchAgentStatus()
+
+            if launchWithSystem != newValue {
+                let reason = failure?.localizedDescription ?? "the system kept the previous setting"
+                errorMessage = "Couldn't turn \(newValue ? "on" : "off") launch at login — \(reason)" // TODO: localize string
+            }
+        }
+    }
+
+    /// Registered, but the user still has to allow it in System Settings › Login Items.
+    var launchWithSystemNeedsApproval: Bool {
+        launchAgentStatus == .requiresApproval
+    }
+
+    func refreshLaunchAgentStatus() {
+        launchAgentStatus = DeFeedbackHostApp.GetLaunchDaemonState()
+    }
+
+
     // MARK: - Startup and new-instance defaults
 
     var autoRunOnStartup = false {
@@ -600,6 +645,7 @@ final class AudioHost {
     func loadApplicationState() async {
         let settings = SettingsStore.load(from: defaults)
 
+        refreshLaunchAgentStatus()
         refreshDevices()
         deviceMonitor = DeviceListMonitor { [weak self] in
             self?.refreshDevices()

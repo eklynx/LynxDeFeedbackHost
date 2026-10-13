@@ -687,3 +687,25 @@ struct SampleRateGateTests {
         #expect(AudioHost.menuSelection(forCurrent: nil, from: []) == nil)
     }
 }
+
+// MARK: - Launch at login
+
+struct LaunchLocationTests {
+
+    @Test func anInstalledCopyIsInTheApplicationsFolder() {
+        #expect(AudioHost.isInApplicationsFolder(URL(filePath: "/Applications/DeFeedbackHost.app")))
+        #expect(AudioHost.isInApplicationsFolder(URL(filePath: "/Applications/Audio/DeFeedbackHost.app")))
+    }
+
+    @Test func copiesElsewhereAreNot() {
+        // A build folder, the user's own Applications folder, a mounted disk image, and a translocated download.
+        #expect(!AudioHost.isInApplicationsFolder(URL(filePath: "/Users/someone/Library/Developer/Xcode/DerivedData/Build/Products/Debug/DeFeedbackHost.app")))
+        #expect(!AudioHost.isInApplicationsFolder(URL(filePath: "/Users/someone/Applications/DeFeedbackHost.app")))
+        #expect(!AudioHost.isInApplicationsFolder(URL(filePath: "/Volumes/DeFeedbackHost/DeFeedbackHost.app")))
+        #expect(!AudioHost.isInApplicationsFolder(URL(filePath: "/private/var/folders/xx/AppTranslocation/ABC/d/DeFeedbackHost.app")))
+    }
+
+    @Test func aLookalikeFolderNameIsNotTheApplicationsFolder() {
+        #expect(!AudioHost.isInApplicationsFolder(URL(filePath: "/ApplicationsOld/DeFeedbackHost.app")))
+    }
+}

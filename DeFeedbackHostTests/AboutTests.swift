@@ -22,6 +22,8 @@ struct AppInfoTests {
                 == bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)
         #expect(AppInfo.build
                 == bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String)
+        #expect(AppInfo.gitCommit
+                == bundle.object(forInfoDictionaryKey: "GitCommit") as? String)
         #expect(AppInfo.copyright
                 == bundle.object(forInfoDictionaryKey: "NSHumanReadableCopyright") as? String)
     }

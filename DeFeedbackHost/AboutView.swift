@@ -21,6 +21,9 @@ nonisolated enum AppInfo {
     /// `CFBundleVersion` — the build version (unique between builds).
     static let build = getBundleString("CFBundleVersion") ?? "—"
 
+    /// Git commit hash that this build is based on.
+    static let gitCommit = getBundleString("GitCommit")
+
     /// `NSHumanReadableCopyright` - copyright string exists, otherwise nil.
     static let copyright = getBundleString("NSHumanReadableCopyright")
 
@@ -64,6 +67,12 @@ struct AboutView: View {
 
                 Text("Version: \(AppInfo.shortVersion) (\(AppInfo.build))")
                     .foregroundStyle(.secondary)
+
+                if let gitCommit = AppInfo.gitCommit {
+                    Text("Git Commit Version: \(gitCommit)")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                }
 
                 if let copyright = AppInfo.copyright {
                     Text(copyright)
