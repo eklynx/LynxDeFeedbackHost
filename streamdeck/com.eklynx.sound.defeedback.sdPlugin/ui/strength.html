@@ -14,8 +14,15 @@
 <sdpi-item label="Instance Name">
     <sdpi-textfield setting="instanceName" default="Vox1" required=true ></sdpi-textfield>
 </sdpi-item>
-<sdpi-item label="Strength">
-    <sdpi-textfield setting="strengthPercent" pattern="([0-9][0-9]?|100)" default="80" required=true ></sdpi-textfield>
+<sdpi-item id="strengthItem" label="Strength">
+    <sdpi-textfield id="strengthField" setting="strengthPercent" pattern="([0-9][0-9]?|100)" default="80"></sdpi-textfield>
+</sdpi-item>
+<sdpi-item id="dialButtonItem" label="Dial Button" style="display:none">
+    <sdpi-select id="dialButtonSelect" setting="dialButtonBehavior" default="none">
+        <option value="none">None</option>
+        <option value="mute">Mute</option>
+        <option value="bypass">Bypass</option>
+    </sdpi-select>
 </sdpi-item>
 
 <sdpi-heading>Plugin Settings</sdpi-heading>
@@ -31,6 +38,17 @@
 <sdpi-item label="Password">
     <sdpi-textfield global setting="password" type="password" placeholder="(optional)"></sdpi-textfield>
 </sdpi-item>
+<script>
+    SDPIComponents.streamDeckClient.getConnectionInfo().then((info) => {
+        const isEncoder = info?.actionInfo?.payload?.controller === "Encoder";
+
+        document.getElementById("strengthItem").style.display = isEncoder ? "none" : "";
+        document.getElementById("dialButtonItem").style.display = isEncoder ? "" : "none";
+
+        document.getElementById("strengthField").required = !isEncoder;
+        document.getElementById("dialButtonSelect").required = isEncoder;
+    });
+</script>
 </body>
 
 </html>
