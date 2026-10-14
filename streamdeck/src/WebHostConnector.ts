@@ -238,8 +238,9 @@ export class WebHostConnector {
                 modified = true;
             }
 
-            for (const key in Object.keys(globalSettings.instances)) {
-                if (!status.instances[key]) {
+            const keys = Object.keys(globalSettings.instances)
+            for (const key of keys) {
+                if (!status.instances.find(value => value.id == key)) {
                     delete globalSettings.instances[key];
                 }
             }
@@ -247,7 +248,8 @@ export class WebHostConnector {
                 if (!globalSettings.instances) {
                     throw new Error("Instances not found");
                 }
-               const id = inst.id as string;
+
+                const id = inst.id as string;
                if (!globalSettings.instances[id]) {
                    modified = true; // new item
                }
@@ -258,13 +260,19 @@ export class WebHostConnector {
                        modified = true;
                    }
                }
-               globalSettings.instances[inst.id as string] = {
+               let lastUpdated = globalSettings.instances[id]?.encoderLastUpdated
+                // @ts-ignore
+                let oldStr  = globalSettings.instances[id].strength;
+
+                globalSettings.instances[inst.id as string] = {
                    version: CURRENT_VERSION,
-                    id: id,
-                    isBypassed: inst.bypassed,
-                    isMuted: inst.muted,
-                    strength: inst.strength ?? 0
+                   id: id,
+                   isBypassed: inst.bypassed,
+                   isMuted: inst.muted,
+                   strength: (lastUpdated ? oldStr : inst.strength as number),
+                   encoderLastUpdated: lastUpdated,
                }
+
             });
 
             globalSettings.lastUpdated = Date.now();

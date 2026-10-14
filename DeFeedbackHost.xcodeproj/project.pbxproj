@@ -476,6 +476,9 @@
 		9B7EDE473076A46300860000 /* Build Stream Deck Plugin */ = {
 			isa = PBXShellScriptBuildPhase;
 			name = "Build Stream Deck Plugin";
+			outputPaths = (
+				"$(PROJECT_DIR)/streamdeck/com.eklynx.sound.defeedback.streamDeckPlugin",
+			);
 			runOnlyForDeploymentPostprocessing = 1;
 			shellPath = /bin/sh;
 			shellScript = (
@@ -813,7 +816,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 27.0;
-				MARKETING_VERSION = 0.1.1;
+				MARKETING_VERSION = 0.1.2;
 				OTHER_CPLUSPLUSFLAGS = (
 					"-Wfunction-effects",
 					"-Werror=function-effects",
@@ -877,7 +880,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 27.0;
-				MARKETING_VERSION = 0.1.1;
+				MARKETING_VERSION = 0.1.2;
 				OTHER_CPLUSPLUSFLAGS = (
 					"-Wfunction-effects",
 					"-Werror=function-effects",

@@ -1,6 +1,6 @@
 {
 	"Name": "Lynx DeFeedback Host Controller",
-	"Version": "0.1.0.0",
+	"Version": "0.1.2.0",
 	"Author": "EKLynx Software",
 	"Actions": [
 		{
@@ -42,11 +42,15 @@
 			"Icon": "imgs/plugin/DeFeedbackHostLogo",
 			"PropertyInspectorPath": "ui/strength.html",
 			"Controllers": [
-				"Keypad"
+				"Keypad",
+				"Encoder"
 			],
+			"Encoder": {
+				"layout": "$B2"
+			},
 			"States": [
 				{
-					"Image": "imgs/actions/strength/strength_key",
+					"Image": "imgs/plugin/logo",
 					"TitleAlignment": "top"
 				}
 			]
