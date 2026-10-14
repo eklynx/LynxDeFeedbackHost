@@ -6,6 +6,7 @@ export type PluginInstance = {
     isMuted: boolean;
     isBypassed: boolean;
     strength: number;
+    encoderLastUpdated?: number;
 }
 
 export type GlobalSettings = {

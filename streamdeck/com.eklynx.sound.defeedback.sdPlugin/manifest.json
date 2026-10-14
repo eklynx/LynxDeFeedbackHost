@@ -42,8 +42,12 @@
 			"Icon": "imgs/plugin/DeFeedbackHostLogo",
 			"PropertyInspectorPath": "ui/strength.html",
 			"Controllers": [
-				"Keypad"
+				"Keypad",
+				"Encoder"
 			],
+			"Encoder": {
+				"layout": "$B2"
+			},
 			"States": [
 				{
 					"Image": "imgs/actions/strength/strength_key",

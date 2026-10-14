@@ -1,5 +1,5 @@
 import streamDeck, {
-	action, DialAction,
+	action, DialAction, DialRotateEvent,
 	DidReceiveSettingsEvent, KeyAction,
 	KeyDownEvent,
 	SingletonAction,
@@ -21,7 +21,7 @@ function readStrengthKeySvgFile(): string {
 		const filePath = path.join( 'imgs','actions','strength', 'strength_key.svg');
 		return fs.readFileSync(filePath, 'utf8');
 	} catch (error) {
-		console.error('Error reading file:', error);
+		streamDeck.logger.error('Error reading file:', error);
 		return 'Error';
 	}
 }
@@ -50,7 +50,7 @@ export class Strength extends SingletonAction<StrengthSettings> {
 		return await this.updateActionFromEvent(ev, globalSettings);
 	}
 
-	override async onWillAppear(ev: WillAppearEvent<StrengthSettings>): Promise<void> {
+	override async onWillAppear(ev: WillAppearEvent<StrengthSettings>) {
 		const globalSettings: GlobalSettings = await streamDeck.settings.getGlobalSettings();
 		return this.updateActionFromEvent(ev, globalSettings);
 	}
@@ -79,7 +79,13 @@ export class Strength extends SingletonAction<StrengthSettings> {
 				streamDeck.logger.error(`Invalid strength value ${settings.strengthPercent}`);
 			}
 		}
-		await Strength.updateActionImage(action, settings.instanceName ?? "", targetStrength, globalSettings);
+		if (action.isKey()){
+			return  Strength.updateActionImage(action, settings.instanceName ?? "", targetStrength, globalSettings);
+		} else if (action.isDial()) {
+			return  Strength.updateActionEncoder(action, settings.instanceName ?? "", globalSettings);
+		} else {
+			streamDeck.logger.warn("Unknwon action type. ", action)
+		}
 	}
 
 	private static async updateActionImage(action:KeyAction|DialAction, instanceName:string, targetStrength: number | null, globalSettings:GlobalSettings) {
@@ -90,13 +96,43 @@ export class Strength extends SingletonAction<StrengthSettings> {
 		const isRunning: boolean = globalSettings.isRunning;
 		const imgStr = Strength.getImageStr(targetStrength, targetStrength == currentStrength, isBypassed, isUnknown, isDisconnected, isRunning)
 		await action.setImage(imgStr);
-		return action.setTitle(instanceName ?? "???");
+		await action.setTitle(instanceName ?? "???");
+	}
+
+	private static async updateActionEncoder(action: DialAction, instanceName:string, globalSettings:GlobalSettings) {
+		const currentStrength = globalSettings.instances?.[instanceName]?.strength ?? -1;
+		const isBypassed = globalSettings.instances?.[instanceName]?.isBypassed ?? false;
+		const isMuted = globalSettings.instances?.[instanceName]?.isMuted ?? false;
+		const isUnknown: boolean = !globalSettings.instances?.[instanceName];
+		const isDisconnected: boolean = !(getConnector()?.isConnected as boolean ?? false)
+		const isRunning: boolean = globalSettings.isRunning;
+		const prefix =
+			(isMuted ? "M" : "") +
+			(isBypassed ? "B" : "") +
+			(isMuted || isBypassed ? " ":"");
+		const valueText = isDisconnected ? "Disconnected"
+			: !isRunning ? "Stopped"
+			: isUnknown || currentStrength < 0 ? "Unknown"
+			: `${currentStrength}%`;
+		let setFb = action.setFeedback({
+			title: instanceName || "???",
+			value: prefix + valueText,
+			indicator: {
+				value: Math.max(currentStrength, 0),
+				range: {
+					min: 0,
+					max: 100,
+				},
+			},
+		});
+		let setTitle = action.setTitle((instanceName || "???") + (isMuted ? " - Muted" : "") +  (isBypassed ? " - Bypassed" : ""));
+		await Promise.allSettled([setFb, setTitle]);
 	}
 
 	override async onKeyDown(ev: KeyDownEvent<StrengthSettings>): Promise<void> {
 		const {settings} = ev.payload;
 
-		if (settings.instanceName == null || settings.strengthPercent == null) { // TODO: ERROR image
+		if (settings.instanceName == null || settings.strengthPercent == null) {
 			return;
 		}
 		var globalSettings: GlobalSettings = await streamDeck.settings.getGlobalSettings();
@@ -125,6 +161,29 @@ export class Strength extends SingletonAction<StrengthSettings> {
 		}
 		hostDataUpdateEventBus.emit(HostSettingsUpdatedEventEmitter.EVENT_NAME, globalSettings)
 		await Strength.updateActionImage(ev.action, instanceName, strengthPercent, globalSettings);
+	}
+
+	override async onDialRotate(ev: DialRotateEvent<StrengthSettings>) {
+		const {settings} = ev.payload;
+
+		if (settings.instanceName == null) {
+			return;
+		}
+		let globalSettings: GlobalSettings = await streamDeck.settings.getGlobalSettings();
+		const instanceName:string = settings.instanceName;
+		if (globalSettings.instances?.[instanceName]) {
+			globalSettings.instances[instanceName].strength += ev.payload.ticks;
+			if (globalSettings.instances[instanceName].strength < 0) {
+				globalSettings.instances[instanceName].strength = 0;
+			} else if (globalSettings.instances[instanceName].strength > 100) {
+				globalSettings.instances[instanceName].strength = 100;
+			}
+			globalSettings.instances[instanceName].encoderLastUpdated = Date.now()
+		}
+		await streamDeck.settings.setGlobalSettings(globalSettings);
+		hostDataUpdateEventBus.emit(HostSettingsUpdatedEventEmitter.EVENT_NAME, globalSettings)
+
+
 	}
 }
 

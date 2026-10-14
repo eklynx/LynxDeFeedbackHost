@@ -476,6 +476,9 @@
 		9B7EDE473076A46300860000 /* Build Stream Deck Plugin */ = {
 			isa = PBXShellScriptBuildPhase;
 			name = "Build Stream Deck Plugin";
+			outputPaths = (
+				"$(PROJECT_DIR)/streamdeck/com.eklynx.sound.defeedback.streamDeckPlugin",
+			);
 			runOnlyForDeploymentPostprocessing = 1;
 			shellPath = /bin/sh;
 			shellScript = (
