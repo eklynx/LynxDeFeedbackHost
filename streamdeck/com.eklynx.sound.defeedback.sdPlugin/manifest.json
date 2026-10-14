@@ -50,7 +50,7 @@
 			},
 			"States": [
 				{
-					"Image": "imgs/actions/strength/strength_key",
+					"Image": "imgs/plugin/logo",
 					"TitleAlignment": "top"
 				}
 			]

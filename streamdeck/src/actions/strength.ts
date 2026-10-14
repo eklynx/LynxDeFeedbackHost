@@ -1,5 +1,5 @@
 import streamDeck, {
-	action, DialAction, DialRotateEvent,
+	action, DialAction, DialDownEvent, DialRotateEvent,
 	DidReceiveSettingsEvent, KeyAction,
 	KeyDownEvent,
 	SingletonAction,
@@ -13,7 +13,7 @@ import {hostDataUpdateEventBus, HostSettingsUpdatedEventEmitter} from "../HostSe
 // @ts-ignore
 import {ActionEvent} from "@elgato/streamdeck/types/common/events";
 import {GlobalSettings} from "../GlobalSettings";
-import {StrengthCommand} from "../WebHostConnector";
+import {BypassCommand, MuteCommand, StrengthCommand} from "../WebHostConnector";
 import {getConnector} from "../connectorState";
 
 function readStrengthKeySvgFile(): string {
@@ -163,6 +163,35 @@ export class Strength extends SingletonAction<StrengthSettings> {
 		await Strength.updateActionImage(ev.action, instanceName, strengthPercent, globalSettings);
 	}
 
+	override async onDialDown(ev: DialDownEvent<StrengthSettings>) {
+		const {settings} = ev.payload;
+		const behavior = settings.dialButtonBehavior;
+
+		if (settings.instanceName == null || (behavior !== "mute" && behavior !== "bypass")) {
+			return;
+		}
+		const instanceName: string = settings.instanceName;
+		const globalSettings: GlobalSettings = await streamDeck.settings.getGlobalSettings();
+		const instance = globalSettings.instances?.[instanceName];
+
+		if (instance) {
+			let cmd: MuteCommand | BypassCommand;
+			if (behavior === "mute") {
+				instance.isMuted = !(instance.isMuted ?? false);
+				cmd = {type: "mute", instanceId: instanceName, muted: instance.isMuted};
+			} else {
+				instance.isBypassed = !(instance.isBypassed ?? false);
+				cmd = {type: "bypass", instanceId: instanceName, bypassed: instance.isBypassed};
+			}
+			await Promise.allSettled([
+				streamDeck.settings.setGlobalSettings(globalSettings),
+				getConnector()?.sendCommand(cmd)
+			]);
+		}
+		hostDataUpdateEventBus.emit(HostSettingsUpdatedEventEmitter.EVENT_NAME, globalSettings)
+		await Strength.updateActionEncoder(ev.action, instanceName, globalSettings);
+	}
+
 	override async onDialRotate(ev: DialRotateEvent<StrengthSettings>) {
 		const {settings} = ev.payload;
 
@@ -190,4 +219,5 @@ export class Strength extends SingletonAction<StrengthSettings> {
 type StrengthSettings = {
 	instanceName?: string;
 	strengthPercent?: number;
+	dialButtonBehavior?: "none" | "mute" | "bypass";
 };
