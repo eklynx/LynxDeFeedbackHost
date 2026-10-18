@@ -1,0 +1,57 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - '**.swift'
+      - '**.h'
+      - '**.cpp'
+      - 'DeFeedbackHost.xcodeproj/**'
+      - 'streamdeck/**'
+      - '.github/workflows/codeql.yml'
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Runner override as JSON (empty uses RUNNER_LABEL variable)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ${{ matrix.language == 'swift' && fromJSON(inputs.runner || vars.RUNNER_LABEL || '"macos-latest"') || 'ubuntu-latest' }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [swift, javascript-typescript]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Select Xcode
+        if: ${{ matrix.language == 'swift' && vars.XCODE_PATH != '' }}
+        run: sudo xcode-select -s "${{ vars.XCODE_PATH }}"
+      - uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.language == 'swift' && 'manual' || 'none' }}
+      - name: Build
+        if: ${{ matrix.language == 'swift' }}
+        run: |
+          xcodebuild build \
+            -project DeFeedbackHost.xcodeproj \
+            -scheme DeFeedbackHost \
+            -destination 'platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY=""
+      - uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4
+        with:
+          category: /language:${{ matrix.language }}

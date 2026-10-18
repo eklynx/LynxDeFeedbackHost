@@ -1,6 +1,8 @@
 ![Logo](./docs/images/icon_256x256.png)
 
 # Lynx DeFeedback Host
+[![CI](https://github.com/eklynx/LynxDeFeedbackHost/actions/workflows/ci.yml/badge.svg)](https://github.com/eklynx/LynxDeFeedbackHost/actions/workflows/ci.yml)
+
 ## Disclaimer:
 This project is in no way affiliated with Alpha Labs LLC. It just uses their DeFeedback Audio Unit that they created and uses their logo for visual identification purposes only. 
 ## Purpose:
@@ -58,6 +60,15 @@ Plugin Error states:
 - Invalid instance name.  Verify that the action's Instance Name references a valid instance in the host.
     - Example images  
       - ![Strength Invalid Instance](./docs/images/strength-invalid-instance.png) ![Unmuted Invalid Instance](./docs/images/unmuted-invalid-instance.png) ![Bypass Invalid Instance](./docs/images/bypass-invalid-instance.png)
+
+## CI:
+GitHub Actions (`.github/workflows/ci.yml`) builds the app unsigned, runs the unit tests (`DeFeedbackHostTests`), lints Swift (SwiftLint, baseline in `.swiftlint.baseline.json`), builds/typechecks the Stream Deck plugin, and lints `openapi.yaml`. CodeQL and Dependabot are configured too. Require the `ci-ok` check in branch protection.
+
+The app targets a very new macOS/Xcode, which GitHub-hosted runners may not have yet. Switch runners without editing workflows via repository variables (Settings > Secrets and variables > Actions > Variables):
+- `RUNNER_LABEL`: JSON, e.g. `"macos-27"` or `["self-hosted","macOS"]` (default `"macos-latest"`)
+- `XCODE_PATH`: optional, e.g. `/Applications/Xcode_27.app`
+
+A manual run (Actions > CI > Run workflow) can override the runner and include the UI tests.
 
 ## Donations Accepted:
 As I am currently an unemployed software engineer I have not been able to afford buying a license to the DeFeedback Plugin.  All testing has been performed using the trial version.    If you find this project useful or at least promising, I do encourage you to donate!  Donations will be used to first purchase three copies of the DeFeedback plugin, one for my main development box, the others for my live sound rig for active usage/testing of this app, as well as a backup for my laptop, because any live sound engineer needs a backup for anything critical.  After that has been achieved, further donations will go to upgrading my live sound gear that this plugin directly interfaces with such as a new mixer and dante interfaces.
