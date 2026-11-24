@@ -15,6 +15,7 @@ import {ActionEvent} from "@elgato/streamdeck/types/common/events";
 import {GlobalSettings} from "../GlobalSettings";
 import {BypassCommand, MuteCommand, StrengthCommand} from "../WebHostConnector";
 import {getConnector} from "../connectorState";
+import {scheduleEncoderCommit, updateGlobalSettings} from "../globalSettingsStore";
 
 function readStrengthKeySvgFile(): string {
 	try {
@@ -130,89 +131,101 @@ export class Strength extends SingletonAction<StrengthSettings> {
 	}
 
 	override async onKeyDown(ev: KeyDownEvent<StrengthSettings>): Promise<void> {
-		const {settings} = ev.payload;
+		try {
+			const {settings} = ev.payload;
 
-		if (settings.instanceName == null || settings.strengthPercent == null) {
-			return;
-		}
-		var globalSettings: GlobalSettings = await streamDeck.settings.getGlobalSettings();
-		const instanceName:string = settings.instanceName;
+			if (settings.instanceName == null || settings.strengthPercent == null) {
+				return;
+			}
+			const instanceName:string = settings.instanceName;
 
-		let strengthPercent: number = Number(settings.strengthPercent)
-		if (strengthPercent < 0 || strengthPercent > 100) {
-			strengthPercent = -1;
-			streamDeck.logger.error(`Invalid strength value ${ev.payload.settings.strengthPercent}`);
-		}
-
-		if (globalSettings.instances?.[instanceName] && strengthPercent >= 0) {
-			globalSettings.instances[instanceName].strength = strengthPercent;
-
-			let cmd:StrengthCommand = {
-				type: "strength",
-				instanceId: instanceName,
-				strength: strengthPercent
+			let strengthPercent: number = Number(settings.strengthPercent)
+			if (strengthPercent < 0 || strengthPercent > 100) {
+				strengthPercent = -1;
+				streamDeck.logger.error(`Invalid strength value ${ev.payload.settings.strengthPercent}`);
 			}
 
-			await Promise.allSettled([
-				streamDeck.settings.setGlobalSettings(globalSettings),
-				getConnector()?.sendCommand(cmd)
-			]);
+			const {settings: globalSettings, result: found} = await updateGlobalSettings((gs) => {
+				const instance = gs.instances?.[instanceName];
+				if (!instance || strengthPercent < 0) {
+					return false;
+				}
+				instance.strength = strengthPercent;
+				return true;
+			});
 
+			if (found) {
+				const cmd:StrengthCommand = {
+					type: "strength",
+					instanceId: instanceName,
+					strength: strengthPercent
+				}
+				await Promise.allSettled([getConnector()?.sendCommand(cmd)]);
+			}
+			hostDataUpdateEventBus.emit(HostSettingsUpdatedEventEmitter.EVENT_NAME, globalSettings)
+			await Strength.updateActionImage(ev.action, instanceName, strengthPercent, globalSettings);
+		} catch (error) {
+			streamDeck.logger.error("onKeyDown failed", error);
 		}
-		hostDataUpdateEventBus.emit(HostSettingsUpdatedEventEmitter.EVENT_NAME, globalSettings)
-		await Strength.updateActionImage(ev.action, instanceName, strengthPercent, globalSettings);
 	}
 
 	override async onDialDown(ev: DialDownEvent<StrengthSettings>) {
-		const {settings} = ev.payload;
-		const behavior = settings.dialButtonBehavior;
+		try {
+			const {settings} = ev.payload;
+			const behavior = settings.dialButtonBehavior;
 
-		if (settings.instanceName == null || (behavior !== "mute" && behavior !== "bypass")) {
-			return;
-		}
-		const instanceName: string = settings.instanceName;
-		const globalSettings: GlobalSettings = await streamDeck.settings.getGlobalSettings();
-		const instance = globalSettings.instances?.[instanceName];
-
-		if (instance) {
-			let cmd: MuteCommand | BypassCommand;
-			if (behavior === "mute") {
-				instance.isMuted = !(instance.isMuted ?? false);
-				cmd = {type: "mute", instanceId: instanceName, muted: instance.isMuted};
-			} else {
-				instance.isBypassed = !(instance.isBypassed ?? false);
-				cmd = {type: "bypass", instanceId: instanceName, bypassed: instance.isBypassed};
+			if (settings.instanceName == null || (behavior !== "mute" && behavior !== "bypass")) {
+				return;
 			}
-			await Promise.allSettled([
-				streamDeck.settings.setGlobalSettings(globalSettings),
-				getConnector()?.sendCommand(cmd)
-			]);
+			const instanceName: string = settings.instanceName;
+			const {settings: globalSettings, result: cmd} = await updateGlobalSettings((gs): MuteCommand | BypassCommand | undefined => {
+				const instance = gs.instances?.[instanceName];
+				if (!instance) {
+					return undefined;
+				}
+				if (behavior === "mute") {
+					instance.isMuted = !(instance.isMuted ?? false);
+					return {type: "mute", instanceId: instanceName, muted: instance.isMuted};
+				}
+				instance.isBypassed = !(instance.isBypassed ?? false);
+				return {type: "bypass", instanceId: instanceName, bypassed: instance.isBypassed};
+			});
+
+			if (cmd) {
+				await Promise.allSettled([getConnector()?.sendCommand(cmd)]);
+			}
+			hostDataUpdateEventBus.emit(HostSettingsUpdatedEventEmitter.EVENT_NAME, globalSettings)
+			await Strength.updateActionEncoder(ev.action, instanceName, globalSettings);
+		} catch (error) {
+			streamDeck.logger.error("onDialDown failed", error);
 		}
-		hostDataUpdateEventBus.emit(HostSettingsUpdatedEventEmitter.EVENT_NAME, globalSettings)
-		await Strength.updateActionEncoder(ev.action, instanceName, globalSettings);
 	}
 
 	override async onDialRotate(ev: DialRotateEvent<StrengthSettings>) {
-		const {settings} = ev.payload;
+		try {
+			const {settings} = ev.payload;
 
-		if (settings.instanceName == null) {
-			return;
-		}
-		let globalSettings: GlobalSettings = await streamDeck.settings.getGlobalSettings();
-		const instanceName:string = settings.instanceName;
-		if (globalSettings.instances?.[instanceName]) {
-			globalSettings.instances[instanceName].strength += ev.payload.ticks;
-			if (globalSettings.instances[instanceName].strength < 0) {
-				globalSettings.instances[instanceName].strength = 0;
-			} else if (globalSettings.instances[instanceName].strength > 100) {
-				globalSettings.instances[instanceName].strength = 100;
+			if (settings.instanceName == null) {
+				return;
 			}
-			globalSettings.instances[instanceName].encoderLastUpdated = Date.now()
+			const instanceName: string = settings.instanceName;
+			const {settings: globalSettings, result: changed} = await updateGlobalSettings((gs) => {
+				const instance = gs.instances?.[instanceName];
+				if (!instance) {
+					return false;
+				}
+				instance.strength = Math.min(100, Math.max(0, instance.strength + ev.payload.ticks));
+				instance.encoderLastUpdated = Date.now();
+				return true;
+			});
+			if (!changed) {
+				return;
+			}
+			hostDataUpdateEventBus.emit(HostSettingsUpdatedEventEmitter.EVENT_NAME, globalSettings);
+			scheduleEncoderCommit();
+		} catch (error) {
+			streamDeck.logger.error("onDialRotate failed", error);
 		}
-		await streamDeck.settings.setGlobalSettings(globalSettings);
-		hostDataUpdateEventBus.emit(HostSettingsUpdatedEventEmitter.EVENT_NAME, globalSettings)
-
-
 	}
 }
 

@@ -2,7 +2,8 @@ import http from "node:http";
 import streamDeck from "@elgato/streamdeck";
 import {Instance, Status} from "./HostStatus";
 
-import {CURRENT_VERSION, GlobalSettings, PluginInstance} from "./GlobalSettings";
+import {CURRENT_VERSION, GlobalSettings} from "./GlobalSettings";
+import {updateGlobalSettings} from "./globalSettingsStore";
 import {hostDataUpdateEventBus, HostSettingsUpdatedEventEmitter} from "./HostSettingsUpdatedEvent";
 
 const RETRY_DELAY_MS = 500;
@@ -226,60 +227,60 @@ export class WebHostConnector {
 
     private async onStatusEvent(status: Status): Promise<void> {
         streamDeck.logger.debug("Received status event", status);
-        let globalSettings: GlobalSettings = await streamDeck.settings.getGlobalSettings();
-        let modified = false;
-        if (globalSettings) {
-            if (globalSettings.instances == null)  {
-                globalSettings.instances = {};
-            }
+        try {
+            const {settings, result: modified} = await updateGlobalSettings((globalSettings) => {
+                let modified = false;
+                const instances = (globalSettings.instances ??= {});
 
-            if (globalSettings.isRunning != status.running) {
-                globalSettings.isRunning = status.running;
-                modified = true;
-            }
-
-            const keys = Object.keys(globalSettings.instances)
-            for (const key of keys) {
-                if (!status.instances.find(value => value.id == key)) {
-                    delete globalSettings.instances[key];
-                }
-            }
-            status.instances.forEach((inst: Instance)=> {
-                if (!globalSettings.instances) {
-                    throw new Error("Instances not found");
+                if (globalSettings.isRunning != status.running) {
+                    globalSettings.isRunning = status.running;
+                    modified = true;
                 }
 
-                const id = inst.id as string;
-               if (!globalSettings.instances[id]) {
-                   modified = true; // new item
-               }
-               else {
-                   if (globalSettings.instances[id].isBypassed != inst.bypassed ||
-                       globalSettings.instances[id].isMuted != inst.muted ||
-                       globalSettings.instances[id].strength != inst.strength) {
-                       modified = true;
-                   }
-               }
-               let lastUpdated = globalSettings.instances[id]?.encoderLastUpdated
-                // @ts-ignore
-                let oldStr  = globalSettings.instances[id].strength;
+                for (const key of Object.keys(instances)) {
+                    if (!status.instances.find(value => value.id == key)) {
+                        delete instances[key];
+                        modified = true;
+                    }
+                }
 
-                globalSettings.instances[inst.id as string] = {
-                   version: CURRENT_VERSION,
-                   id: id,
-                   isBypassed: inst.bypassed,
-                   isMuted: inst.muted,
-                   strength: (lastUpdated ? oldStr : inst.strength as number),
-                   encoderLastUpdated: lastUpdated,
-               }
+                for (const inst of status.instances) {
+                    const id = inst.id as string;
+                    const existing = instances[id];
+                    // While an encoder edit is pending, keep the local strength rather than the host's.
+                    const encoderLastUpdated = existing?.encoderLastUpdated;
+                    const strength = encoderLastUpdated && existing
+                        ? existing.strength
+                        : (inst.strength ?? existing?.strength ?? 0);
 
+                    if (!existing
+                        || existing.isBypassed != inst.bypassed
+                        || existing.isMuted != inst.muted
+                        || (!encoderLastUpdated && existing.strength != strength)) {
+                        modified = true;
+                    }
+
+                    instances[id] = {
+                        version: CURRENT_VERSION,
+                        id: id,
+                        isBypassed: inst.bypassed,
+                        isMuted: inst.muted,
+                        strength,
+                        encoderLastUpdated,
+                    };
+                }
+
+                if (modified) {
+                    globalSettings.lastUpdated = Date.now();
+                }
+                return modified;
             });
 
-            globalSettings.lastUpdated = Date.now();
-            await streamDeck.settings.setGlobalSettings(globalSettings);
-        }
-        if (modified) {
-            hostDataUpdateEventBus.emit(HostSettingsUpdatedEventEmitter.EVENT_NAME, globalSettings)
+            if (modified) {
+                hostDataUpdateEventBus.emit(HostSettingsUpdatedEventEmitter.EVENT_NAME, settings);
+            }
+        } catch (error) {
+            streamDeck.logger.error("Failed to apply status event", error);
         }
     }
 
