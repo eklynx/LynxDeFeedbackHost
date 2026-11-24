@@ -16,17 +16,10 @@ struct GeneralSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Launch on user login and crash", isOn: $host.launchWithSystem)
-                    .disabled(!host.isInApplicationsFolder && !host.launchWithSystem)
+                Toggle("Launch at login", isOn: $host.launchAtLogin)
+                Toggle("Restart after a crash", isOn: $host.restartAfterCrash)
 
-                if !host.isInApplicationsFolder {
-                    Label("DeFeedbackHost must be in /Applications for auto-launch to be enabled.",
-                          systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                        .font(.callout)
-                }
-
-                if host.launchWithSystemNeedsApproval {
+                if host.launchPermissionsNeedApproval {
                     HStack {
                         Label("Launch permissions need approval. Allow DeFeedbackHost to launch in System Settings › General › Login Items & Extensions.",
                               systemImage: "exclamationmark.triangle.fill")
@@ -38,12 +31,27 @@ struct GeneralSettingsView: View {
                     }
                     .font(.callout)
                 }
+
+                if host.needsRelaunchToBeSupervised {
+                    HStack {
+                        Label("This copy was started outside the system's launch service, so a crash won't restart it yet.",
+                              systemImage: "arrow.clockwise.circle.fill")
+                            .foregroundStyle(.orange)
+                        Spacer()
+                        Button("Relaunch Now") {
+                            host.relaunchUnderSupervisor()
+                        }
+                    }
+                    .font(.callout)
+                }
             } header: {
                 Text("App Auto-Launch")
             } footer: {
                 Text("""
-                    Starts the application when the user logs in, as well as relaunches the application \
-                    if it crashes abnormally. The app will not auto-relaunch if terminated normally.
+                    Launch at login starts the application when the user logs in. Restart after a crash \
+                    relaunches it if it quits abnormally, however it was started. Quitting normally \
+                    (including Quit, logout and shutdown) never restarts it. If you move the app, turn \
+                    these settings off and on again.
                     """)
                 .font(.caption)
                 .foregroundStyle(.secondary)

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- "Launch at login" agent. Starts the app when the user logs in; it does NOT supervise it.
+	     Crash restarts are the job of the supervisor agent (see Lifecycle/LaunchSupervision.swift). -->
+	<key>Label</key>
+	<string>com.eklynx.sound.DeFeedbackHost.login</string>
+	<key>BundleProgram</key>
+	<string>Contents/MacOS/DeFeedbackHost</string>
+	<key>AssociatedBundleIdentifiers</key>
+	<array>
+		<string>com.eklynx.sound.DeFeedbackHost</string>
+	</array>
+	<key>LimitLoadToSessionType</key>
+	<string>Aqua</string>
+	<key>RunAtLoad</key>
+	<true/>
+</dict>
+</plist>

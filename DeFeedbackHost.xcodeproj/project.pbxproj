@@ -105,7 +105,8 @@
 		9B1A5E0130A0000000000003 /* Exceptions for "DeFeedbackHost" folder in "DeFeedbackHost" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				com.eklynx.sound.DeFeedbackHost.plist,
+				com.eklynx.sound.DeFeedbackHost.login.plist,
+				com.eklynx.sound.DeFeedbackHost.supervisor.plist,
 			);
 			target = 9B928131305B937A003DD310 /* DeFeedbackHost */;
 		};
@@ -116,7 +117,8 @@
 			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
 			buildPhase = 9B1A5E0130A0000000000001 /* Copy Launch Agent in to application bundle */;
 			membershipExceptions = (
-				com.eklynx.sound.DeFeedbackHost.plist,
+				com.eklynx.sound.DeFeedbackHost.login.plist,
+				com.eklynx.sound.DeFeedbackHost.supervisor.plist,
 			);
 		};
 /* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */

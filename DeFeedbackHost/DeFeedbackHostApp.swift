@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import ServiceManagement
 import os
 
 
@@ -25,14 +24,11 @@ struct DeFeedbackHostApp: App {
 
     static let aboutWindowID = "about"
 
-    @State private var host: AudioHost
-    @State private var web: WebControlService
+    /// The delegate owns the host and web services (and the launch policy); scenes just borrow them.
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
-    init() {
-        let host = AudioHost()
-        _host = State(initialValue: host)
-        _web = State(initialValue: WebControlService(host: host))
-    }
+    private var host: AudioHost { appDelegate.host }
+    private var web: WebControlService { appDelegate.web }
 
     var body: some Scene {
         Window("DeFeedback Host", id: "host") {
@@ -65,25 +61,5 @@ struct DeFeedbackHostApp: App {
                 }
             }
         }
-    }
-
-    static let agent = SMAppService.agent(plistName: "com.eklynx.sound.DeFeedbackHost.plist")
-
-    // Sets or unsets the launch agent that auto-starts the application.
-    static func SetLaunchDaemonState(active: Bool) throws {
-        do {
-            if active {
-                try agent.register()
-            } else {
-                try agent.unregister()
-            }
-        } catch {
-            Logger.host_application.error("Error registering/unregistering launch agent: \(error)")
-            throw error
-        }
-    }
-
-    static func GetLaunchDaemonState() -> SMAppService.Status {
-            return agent.status
     }
 }

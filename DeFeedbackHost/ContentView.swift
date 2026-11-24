@@ -37,11 +37,7 @@ struct ContentView: View {
             gallery
         }
         .frame(minWidth: 820, minHeight: 900)
-        .task {
-            await host.loadApplicationState()
-            // make sure application state is loaded first, as it contains the web settings.
-            web.reconcile()
-        }
+        // Application state is loaded by AppDelegate so it doesn't depend on this window existing.
 
         // instance removal confirmation dialog.
         .confirmationDialog(
