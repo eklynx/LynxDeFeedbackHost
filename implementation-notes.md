@@ -133,3 +133,20 @@ Implemented and unit-tested (rules U18–U24). The real-feed check (nightly, pre
 - Needs the update-channels work (#17): `BUILD_NUMBER` in `set-build-number.sh` and `--channel` in `publish-update.sh`. It is merged, and this branch is rebased on it; `RELEASE_TARGET` (rule R7) was added to `publish-update.sh` here.
 - The hosted runner needs Node for the Stream Deck plugin the archive packs; the job installs `@elgato/cli` and builds `streamdeck/` first.
 
+
+
+# CI/CD: fixing the DMG step of the release dry run (issue #3)
+
+## What happened
+The first release dry run failed in the "Create DMG" phase of the archive with `hdiutil: create failed - No such file or directory` (and a deprecation warning for that form of `hdiutil`). The signing, notarization and verify steps never ran.
+
+## What I found and did
+- **Could not reproduce it.** On the hosted runner every way of making a DMG worked when tried on its own (`hdiutil create` with and without a filesystem choice, and `diskutil image create from`), and a pull-request run of the *real* archive packed the DMG fine, with both DMG phases using plain `hdiutil create`. So the failure was not a deterministic bug in the staged folder or paths; it looks like a one-off failure of the tool on the runner. I have not proven that.
+- **Made it survive and explain itself:** new `scripts/make-dmg.sh` tries `hdiutil` up to 3 times, then prints what is needed to diagnose a real fault and falls back to `diskutil image create from` (the replacement Apple names). Both DMG phases use it.
+- **A proof on every pull request:** a `dmg-smoke` job archives the app like a release and packs an UNSIGNED DMG (`ALLOW_UNSIGNED_DMG=YES`, which exists only for this and refuses to be the default), then verifies and mounts it. It is part of `ci-ok`.
+
+## Things to know
+- If the release fails here again, the log now shows the attempt count, the staged folder and which fallback ran, which is the evidence that was missing.
+- The unsigned image is never publishable: it is not signed, not notarized, and `create-dmg.sh` says so.
+- Still unproven: signing with the Developer ID, notarization with the API key and the verify step. They have not run yet.
+\n
