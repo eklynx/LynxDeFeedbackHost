@@ -7,7 +7,6 @@ import "./actions/iconRefreshListener";
 import {WebHostConnector} from "./WebHostConnector";
 import {getConnector, setConnector} from "./connectorState";
 import {CURRENT_VERSION, GlobalSettings} from "./GlobalSettings";
-import {scheduleEncoderCommit} from "./globalSettingsStore";
 
 // We can enable "trace" logging so that all messages between the Stream Deck, and the plugin are recorded. When storing sensitive information
 streamDeck.logger.setLevel(LogLevel.INFO);
@@ -20,7 +19,7 @@ streamDeck.actions.registerAction(new Strength());
 
 const defaultSettings: GlobalSettings = {
     version: CURRENT_VERSION,
-    lastUpdated: 0,
+    lastUpdated: 0, 
     isRunning: false,
     hostname: "localhost",
     port: 8787,
@@ -78,6 +77,6 @@ async function init(): Promise<void> {
     reconnectWebHost(settings);
 }
 
-// Finally, connect to the Stream Deck. Flush any encoder edit left pending by a previous run.
-streamDeck.connect().then(init).then(scheduleEncoderCommit).catch((error) => streamDeck.logger.error("Plugin init failed", error));
+// Finally, connect to the Stream Deck.
+streamDeck.connect().then(init).catch((error) => streamDeck.logger.error("Plugin init failed", error));
 

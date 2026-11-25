@@ -3,7 +3,7 @@ import streamDeck from "@elgato/streamdeck";
 import {Instance, Status} from "./HostStatus";
 
 import {CURRENT_VERSION, GlobalSettings} from "./GlobalSettings";
-import {updateGlobalSettings} from "./globalSettingsStore";
+import {activeEncoderStrength, updateGlobalSettings} from "./globalSettingsStore";
 import {hostDataUpdateEventBus, HostSettingsUpdatedEventEmitter} from "./HostSettingsUpdatedEvent";
 
 const RETRY_DELAY_MS = 500;
@@ -247,16 +247,19 @@ export class WebHostConnector {
                 for (const inst of status.instances) {
                     const id = inst.id as string;
                     const existing = instances[id];
-                    // While an encoder edit is pending, keep the local strength rather than the host's.
-                    const encoderLastUpdated = existing?.encoderLastUpdated;
-                    const strength = encoderLastUpdated && existing
-                        ? existing.strength
-                        : (inst.strength ?? existing?.strength ?? 0);
+                    // While the dial was turned recently, its value wins over the host's (the host may still be
+                    // echoing an older command).
+                    // The dial's value is rendered from memory (and persisted when the dial goes still), so
+                    // while it is active leave the stored strength alone: a status echo must not cost a
+                    // settings write and a refresh of every action.
+                    const dialActive = activeEncoderStrength(id) !== undefined;
+                    const strength = dialActive ? (existing?.strength ?? inst.strength ?? 0) : (inst.strength ?? existing?.strength ?? 0);
 
                     if (!existing
                         || existing.isBypassed != inst.bypassed
                         || existing.isMuted != inst.muted
-                        || (!encoderLastUpdated && existing.strength != strength)) {
+                        || existing.strength != strength
+                        || existing.encoderLastUpdated !== undefined) {
                         modified = true;
                     }
 
@@ -266,7 +269,6 @@ export class WebHostConnector {
                         isBypassed: inst.bypassed,
                         isMuted: inst.muted,
                         strength,
-                        encoderLastUpdated,
                     };
                 }
 
