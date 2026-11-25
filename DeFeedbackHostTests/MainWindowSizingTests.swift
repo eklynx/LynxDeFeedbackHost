@@ -48,4 +48,42 @@ struct MainWindowSizingTests {
         #expect(with >= without + 20,
                 "required height \(with) with the banner vs \(without) without: the banner is eating the gallery")
     }
+
+    @Test("P9: the permissions banner adds to the window's required height")
+    func permissionsBannerAddsToRequiredHeight() async {
+        func height(denied: Bool) async -> CGFloat {
+            let checker = StubChecker(.microphone, state: denied ? .denied : .granted)
+            let permissions = PermissionService(checkers: [checker])
+            await permissions.start()
+            let host = AudioHost()
+            let view = ContentView(host: host, web: WebControlService(host: host))
+                .environment(permissions)
+            return NSHostingView(rootView: view).fittingSize.height
+        }
+        let without = await height(denied: false)
+        let with = await height(denied: true)
+        #expect(with >= without + 20, "required height \(with) vs \(without)")
+    }
+}
+
+@MainActor
+final class StubChecker: PermissionChecker {
+    let permission: Permission
+    var state: PermissionState
+    var afterRequest: PermissionState
+    private(set) var checkCount = 0
+    private(set) var requestCount = 0
+
+    init(_ permission: Permission, state: PermissionState, afterRequest: PermissionState = .granted) {
+        self.permission = permission
+        self.state = state
+        self.afterRequest = afterRequest
+    }
+
+    func check() async -> PermissionState { checkCount += 1; return state }
+    func request() async -> PermissionState {
+        requestCount += 1
+        state = afterRequest
+        return afterRequest
+    }
 }

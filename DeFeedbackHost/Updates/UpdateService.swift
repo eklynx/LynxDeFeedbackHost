@@ -10,7 +10,7 @@ import os
 
 @Observable
 @MainActor
-final class UpdateService: UpdateStatusSource {
+final class UpdateService: UpdateStatusSource, WarningSource {
 
     private(set) var status = UpdateStatus()
 
@@ -35,6 +35,16 @@ final class UpdateService: UpdateStatusSource {
     }
 
     var updateStatus: UpdateStatus { status }
+
+    /// The web page's "update available" banner (see Warnings/AppWarning.swift).
+    var warnings: [AppWarning] {
+        guard let version = status.availableVersion else { return [] }
+        return [AppWarning(id: "update",
+                           kind: .updateAvailable,
+                           message: "Version \(version) is available. Install it from the app on the host Mac.",
+                           link: status.releasesPage,
+                           linkTitle: "Release notes")]
+    }
 
     @ObservationIgnored private var preferences: UpdatePreferences
     @ObservationIgnored private let engine: UpdateEngine

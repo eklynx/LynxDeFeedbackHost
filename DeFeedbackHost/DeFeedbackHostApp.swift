@@ -34,6 +34,7 @@ struct DeFeedbackHostApp: App {
         Window("DeFeedback Host", id: "host") {
             ContentView(host: host, web: web)
                 .environment(appDelegate.updates)
+                .environment(appDelegate.permissions)
         }
         .defaultSize(width: 900, height: 620)
         .commands {
@@ -63,6 +64,7 @@ struct DeFeedbackHostApp: App {
                 }
             }
             .environment(appDelegate.updates)
+            .environment(appDelegate.permissions)
         }
     }
 }
