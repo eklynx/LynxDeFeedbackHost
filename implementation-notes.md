@@ -59,5 +59,8 @@ Spec: `docs/updates-spec.md`. Contract: `DeFeedbackHost/Updates/UpdateChecking.s
 - **Failed-probe retry policy** is `UpdateScheduler.delay(after:interval:)`; a 60 s floor prevents a request storm.
 - UI tests (the default template) can't launch an unsigned build, so I ran `-only-testing:DeFeedbackHostTests`.
 
+- **Debug-only simulation** (`Updates.simulateVersion`, `SimulatedUpdateEngine`) is wrapped in `#if DEBUG`; verified absent from the Release binary. All defaults keys and release env vars are documented in `docs/debug-settings.md`, with a test that fails if a key is added in code but not documented.
+- **Main-window banner** sits in a top `safeAreaInset` so it adds to the window's required height; the earlier version squeezed the gallery and cut off mute/bypass (regression test U17). The pre-existing error banner still lives inside the fixed 900 pt and could do the same; left alone.
+
 ## Status
 Implemented and unit-tested (17 new tests, rules U1–U15). **Not yet done:** enable GitHub Pages (source: `gh-pages`), and run the manual checklist in `docs/updates-spec.md` (notarized update, relaunch under launchd supervision).

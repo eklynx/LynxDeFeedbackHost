@@ -33,6 +33,8 @@ GitHub Release assets.
 | U16 | Debug builds only: `defaults write … Updates.simulateVersion -string 9.9.9` makes every probe report that version (no network/Sparkle); the code is compiled out of release builds. | `simulatedEngineReportsVersion`, `simulationIsDebugOnly` |
 | U17 | The update banner adds to the main window's required height instead of shrinking the gallery (mute/bypass row stays visible). | `MainWindowSizingTests.bannerAddsToRequiredHeight` |
 
+Debug-only simulation and every other `defaults` key: `docs/debug-settings.md`.
+
 ## Manual checklist (not automatable)
 
 1. **Release build**: Archive, notarize, run `scripts/publish-update.sh` for version N, install N-1.
