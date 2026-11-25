@@ -31,8 +31,8 @@ removed from the runner at the end of the job even when a step fails.
 | R4 | Notarization uses the App Store Connect API key when `NOTARY_KEY_PATH`, `NOTARY_KEY_ID` and `NOTARY_ISSUER_ID` are all set, otherwise the keychain profile (default `DeFeedbackHost-Notary`). Setting only some of the three is an error. | `notaryUsesApiKey`, `notaryUsesProfile`, `notaryRejectsPartialKey` |
 | R5 | The certificate is imported into a temporary keychain with a random password; secrets are only ever passed as environment values (never on a command line or printed); the keychain, its password file and the decoded certificate are removed, also after a failure; missing secrets fail with a clear message. | `certificateImportAndCleanup`, `importNeedsSecrets`, `secretsOnlyInEnv` |
 | R6 | A dry run builds, signs, notarizes and verifies, keeps the DMG as a run artifact, and publishes nothing: no tag, no GitHub Release, no appcast change. | `dryRunPublishesNothing` |
-| R7 | The tag is created on the commit that was tested (`gh release create --target`), even if `main` moved while the release ran. | after the update-channels PR (#17) merges: `publishTagsOnTestedCommit` |
-| R8 | The appcast gets one new item on the release channel, and the `gh-pages` push retries after rebasing so a parallel appcast publish can't clobber it. | `publish-update.sh` tests (#17); push retry checked on the first real run |
+| R7 | The tag is created on the commit that was tested (`gh release create --target`), even if `main` moved while the release ran. | `publishTagsOnTestedCommit` |
+| R8 | The appcast gets one new item on the release channel, and the `gh-pages` push retries after rebasing so a parallel appcast publish can't clobber it. | `UpdateScriptTests.publishTagsChannels` (channel item); push retry checked on the first real run |
 
 ## Manual checklist (needs the real secrets)
 

@@ -199,6 +199,53 @@ struct ReleaseScriptTests {
         #expect(!FileManager.default.fileExists(atPath: dir.appending(path: "test.keychain-db").path))
     }
 
+    // MARK: R7: the tag lands on the tested commit
+
+    /// publish-update.sh with stub `sign_update` and `gh`; returns the `gh release create` call.
+    private func publishCall(channel: String, target: String?) throws -> String {
+        let dir = try scratch()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let bin = dir.appending(path: "bin")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        let calls = dir.appending(path: "gh-calls.txt")
+        func stub(_ name: String, _ body: String) throws {
+            let url = bin.appending(path: name)
+            try "#!/bin/sh\n\(body)\n".write(to: url, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+        }
+        try stub("sign_update", "echo FAKESIGNATURE==")
+        // `release view` fails (no such release yet) so the script goes on to create it.
+        try stub("gh", "echo \"$@\" >> \"\(calls.path)\"\n[ \"$2\" = view ] && exit 1\nexit 0")
+        let dmg = dir.appending(path: "App.dmg")
+        try Data("dmg".utf8).write(to: dmg)
+
+        var env = ["SPARKLE_BIN": bin.path, "SPARKLE_ED_PRIVATE_KEY": "unused",
+                   "PATH": "\(bin.path):/usr/bin:/bin:/usr/sbin:/sbin"]
+        if let target { env["RELEASE_TARGET"] = target }
+        let result = try run("/bin/sh", [script("publish-update.sh"), "--dmg", dmg.path, "--version", "1.2.3",
+                                         "--build", "20261125030000", "--channel", channel,
+                                         "--site-dir", dir.appending(path: "site").path, "--upload"],
+                             environment: env)
+        #expect(result.status == 0, "\(result.output)")
+        let all = (try? String(contentsOf: calls, encoding: .utf8)) ?? ""
+        return all.split(separator: "\n").first { $0.hasPrefix("release create") }.map(String.init) ?? ""
+    }
+
+    @Test("R7: the release is tagged on RELEASE_TARGET, and only pre-releases are marked as such")
+    func publishTagsOnTestedCommit() throws {
+        let release = try publishCall(channel: "release", target: "abc1234")
+        #expect(release.contains("--target abc1234"), "\(release)")
+        #expect(release.contains("v1.2.3"))
+        #expect(!release.contains("--prerelease"), "a release must not be marked as a pre-release")
+
+        let nightly = try publishCall(channel: "nightly", target: "abc1234")
+        #expect(nightly.contains("--target abc1234"))
+        #expect(nightly.contains("--prerelease") && nightly.contains("--latest=false"))
+
+        let untargeted = try publishCall(channel: "release", target: nil)
+        #expect(!untargeted.contains("--target"), "without RELEASE_TARGET nothing is forced: \(untargeted)")
+    }
+
     // MARK: R1 / R5 / R6: the shape of the workflow
 
     private func workflow() throws -> String {

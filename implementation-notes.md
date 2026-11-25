@@ -130,6 +130,6 @@ Implemented and unit-tested (rules U18–U24). The real-feed check (nightly, pre
 ## Things to know / tradeoffs
 - A test caught a real bug in my first import script: `security import` guesses the file format from the extension and my temp file had none ("Unknown format"). It now passes `-f pkcs12`.
 - Not verified: the workflow itself (needs the six secrets), the archive-time signing on a hosted runner, and notarization with the API key. The dry run is the first real test. I did not run a local archive because it would sign with your real Developer ID and could raise keychain prompts.
-- This branch is based on `main` before #17 (update channels). Until #17 merges, `BUILD_NUMBER` (set-build-number.sh) and `publish-update.sh --channel` / `RELEASE_TARGET` don't exist, so the verify step and the publish step would fail. Rebase onto `main` after #17 and add `RELEASE_TARGET` (rule R7) then.
+- Needs the update-channels work (#17): `BUILD_NUMBER` in `set-build-number.sh` and `--channel` in `publish-update.sh`. It is merged, and this branch is rebased on it; `RELEASE_TARGET` (rule R7) was added to `publish-update.sh` here.
 - The hosted runner needs Node for the Stream Deck plugin the archive packs; the job installs `@elgato/cli` and builds `streamdeck/` first.
 
