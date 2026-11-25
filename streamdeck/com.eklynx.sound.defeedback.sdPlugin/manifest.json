@@ -76,8 +76,7 @@
 		}
 	],
 	"Nodejs": {
-		"Version": "20",
-		"Debug": "enabled"
+		"Version": "20"
 	},
 	"UUID": "com.eklynx.sound.defeedback"
 }
