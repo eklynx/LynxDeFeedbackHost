@@ -1,0 +1,65 @@
+name: cert-expiry
+
+# Weekly: read the Developer ID certificate's expiry and open an issue (which emails the owner) when
+# 15 days or fewer are left. Rules and renewal steps: docs/cert-expiry.md. Can also be run by hand;
+# the threshold_days input exists to test it (a large number forces an issue).
+#
+# Two jobs on purpose: the one that sees the secrets only reports a number and a date; the one that
+# may write issues sees no secrets.
+on:
+  schedule:
+    - cron: "0 14 * * 1"   # Mondays, 14:00 UTC
+  workflow_dispatch:
+    inputs:
+      threshold_days:
+        description: Open an issue when this many days or fewer are left
+        type: string
+        default: "15"
+
+permissions: {}
+
+jobs:
+  check:
+    name: Read the certificate expiry
+    runs-on: ${{ fromJSON(vars.RUNNER_LABEL || '"macos-latest"') }}
+    timeout-minutes: 10
+    environment: release
+    permissions:
+      contents: read
+    outputs:
+      days: ${{ steps.expiry.outputs.days }}
+      expires: ${{ steps.expiry.outputs.expires }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Read the expiry
+        id: expiry
+        env:
+          P12_BASE64: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
+          P12_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+        run: sh scripts/ci/cert-expiry.sh
+
+  remind:
+    name: Open or update the reminder issue
+    needs: check
+    # Also when the check failed because the certificate has expired, as long as it read a date.
+    if: ${{ !cancelled() && needs.check.outputs.days != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Open or update the reminder issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DAYS: ${{ needs.check.outputs.days }}
+          EXPIRES: ${{ needs.check.outputs.expires }}
+          THRESHOLD: ${{ inputs.threshold_days || '15' }}
+        run: |
+          sh scripts/ci/remind-expiry.sh --days "$DAYS" --expires "$EXPIRES" --threshold "$THRESHOLD" \
+            --repo "$GITHUB_REPOSITORY" --assignee "$GITHUB_REPOSITORY_OWNER"

@@ -150,3 +150,22 @@ The first release dry run failed in the "Create DMG" phase of the archive with `
 - The unsigned image is never publishable: it is not signed, not notarized, and `create-dmg.sh` says so.
 - Still unproven: signing with the Developer ID, notarization with the API key and the verify step. They have not run yet.
 \n
+
+# CI/CD: certificate expiry reminder (issue #3)
+
+## Decisions not in the spec
+- **Same shape as the reminder in your other project:** a weekly `check` job that sees the secrets and reports only a number and a date, and a `remind` job with `issues: write` and no secrets that opens or updates one issue (label `certificate-expiry`, assigned to the owner so GitHub emails them). Threshold 15 days, as you chose; with the current certificate (expires 2027-02-01) the first issue opens on Mon 2027-01-18.
+- **Simpler check:** it reads the certificate straight from the `.p12` with the system `openssl` and does no keychain work, because the only question is the date. It runs on macOS because the `.p12` Apple's export makes needs the system (LibreSSL) `openssl` and BSD `date`.
+- **Expired is not silent:** the check exits 1 but still prints the numbers, so the reminder job (which runs when it has a date) opens an "expired on …" issue instead of staying quiet.
+- **`CERT_EXPIRY_NOW`** lets tests move "now" instead of generating certificates with odd lifetimes.
+- **`remind-expiry.sh` is plain `sh`** (not bash with indirect variables), so it runs the same under the tests and on the runner.
+
+## Things to know / tradeoffs
+- Scheduled workflows only run from the default branch, so nothing happens until this merges; the first run is the next Monday 14:00 UTC. A manual run with `threshold_days` = `9999` is the real test (it opens one issue, which you then close).
+- GitHub switches off scheduled workflows in a public repo after 60 days without activity.
+- A test of mine failed once because the stub `gh` logged the multi-line issue body across several lines; the script was right. The stub now logs one line per call.
+- It only watches the Developer ID certificate. The notary API key doesn't expire unless revoked, and the Sparkle key never expires.
+
+## Status
+Implemented and unit-tested (rules C1–C9). Not run on GitHub yet: the scheduled and manual runs need this on `main`.
+
