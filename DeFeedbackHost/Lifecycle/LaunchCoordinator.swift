@@ -42,6 +42,7 @@ struct LaunchCoordinator {
     let strikes: StrikeStore
     var isSameApp: (pid_t) -> Bool = LaunchCoordinator.processIsThisApp
     var kill: (pid_t) -> Void = { _ = Foundation.kill($0, SIGKILL) }
+    var tuning: LifecycleTuning = .standard
     var pause: (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) }
 
     /// How long a supervised launch waits for a previous instance to finish quitting.
@@ -72,7 +73,8 @@ struct LaunchCoordinator {
             startedBySupervisor: true,
             contendedLaunches: strikes.count,
             heartbeatAge: lock.holderHeartbeatAge(),
-            holderIsSameApp: holder.map(isSameApp) ?? false)
+            holderIsSameApp: holder.map(isSameApp) ?? false,
+            tuning: tuning)
 
         switch verdict {
         case .leaveAlone:

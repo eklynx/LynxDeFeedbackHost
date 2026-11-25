@@ -30,7 +30,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         super.init()
     }
 
+    /// Unit tests run hosted inside this app. They must neither bow out to a copy the developer is
+    /// running nor touch the real lock/strike counter, so the launch policy is skipped for them.
+    private static let isRunningUnderXCTest =
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+
     func applicationWillFinishLaunching(_ notification: Notification) {
+        guard !Self.isRunningUnderXCTest else { return }
+
         // Runs before any settings are loaded, devices opened or the web port bound, so exiting
         // here cannot clobber the running instance's state. The exits below call exit() rather than
         // NSApp.terminate on purpose: nothing has been started that needs saving, and the exit
@@ -72,7 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Proves to later launches that our main thread is responsive; a hung process stops ticking.
     private func startHeartbeat() {
-        let timer = Timer(timeInterval: StaleHolderPolicy.heartbeatInterval, repeats: true) { [lock] _ in
+        let timer = Timer(timeInterval: LifecycleTuning.standard.heartbeatInterval, repeats: true) { [lock] _ in
             lock.heartbeat()
         }
         RunLoop.main.add(timer, forMode: .common)

@@ -39,3 +39,19 @@ Install a Release build anywhere (no `/Applications` requirement). Turn the sett
 9. Enable *Restart after a crash* while a Finder-launched copy is running → "Relaunch Now" banner appears; pressing it quits and returns under the supervisor.
 10. Toggles are independent: restart on + login off → no start at login, crash still restarts.
 11. Hung holder: `kill -STOP <pid>` the supervised copy, then `launchctl kickstart -k`-less launches: after ~3 retries the hung copy is killed and a fresh one runs. (`kill -CONT` first if you abort.)
+
+## Tunables (UserDefaults, CLI-settable)
+Each is its own key in the `com.eklynx.sound.DeFeedbackHost` domain (unlike the `HostSettings` JSON blob). Applied at next launch; invalid values are clamped. Covered by `LifecycleTuningTests`.
+
+| Key | Type | Default | Range |
+|---|---|---|---|
+| `Lifecycle.heartbeatInterval` | float, seconds | 2 | 0.5 – 60 |
+| `Lifecycle.staleAfter` | float, seconds | 15 | ≥ 3 × heartbeat |
+| `Lifecycle.strikesBeforeKill` | int | 3 | 1 – 20 |
+
+```
+defaults write com.eklynx.sound.DeFeedbackHost Lifecycle.staleAfter -float 30
+defaults read  com.eklynx.sound.DeFeedbackHost Lifecycle.staleAfter
+defaults delete com.eklynx.sound.DeFeedbackHost Lifecycle.staleAfter
+```
+The crash-restart delay (`ThrottleInterval`, 10 s) lives in the supervisor plist, not UserDefaults; changing it needs a rebuild and re-registering the agent.

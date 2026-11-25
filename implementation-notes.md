@@ -24,3 +24,8 @@ Plan: `~/.claude/plans/vivid-sprouting-sonnet.md`. Spec: `docs/launch-and-restar
 
 ## Status
 - App builds. New unit tests written (`LifecycleTests.swift`). `StaleHolderPolicy.verdict` implemented (manual never kills; unknown heartbeat = healthy; kill only after 3 strikes + stale + verified same app) with tests.
+
+## Tunables and test hosting
+- Heartbeat interval, stale threshold and strike count are now individual UserDefaults keys (`Lifecycle.*`, see spec). All other settings are still one JSON blob (`HostSettings`), so they are **not** individually CLI-settable; left as is.
+- `ThrottleInterval` can't be a UserDefaults value (launchd reads the plist).
+- Unit tests are hosted inside the app, so with a real copy running (e.g. an Xcode debug session) the single-instance guard made the test host exit 0 before the runner connected. The launch policy is now skipped under XCTest (`XCTestConfigurationFilePath`). Side effect worth knowing: a running copy no longer blocks `xcodebuild test`.

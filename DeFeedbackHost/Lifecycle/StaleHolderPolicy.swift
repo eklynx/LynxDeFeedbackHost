@@ -18,33 +18,27 @@ enum HolderVerdict: Equatable {
 
 enum StaleHolderPolicy {
 
-    /// A holder that hasn't heartbeat for this long is considered unresponsive.
-    /// (The heartbeat fires every `heartbeatInterval` on the main run loop.)
-    static let heartbeatInterval: TimeInterval = 2
-    static let staleAfter: TimeInterval = 15
-
-    /// Consecutive supervised launches that found the lock held before killing is considered.
-    static let strikesBeforeKill = 3
-
     /// - Parameters:
     ///   - startedBySupervisor: this launch was spawned by the supervisor job. Manual launches must
     ///     NEVER kill anything (requirement 1: a second launch just activates the first).
     ///   - contendedLaunches: consecutive supervised launches (including this one) that found the lock held.
     ///   - heartbeatAge: seconds since the holder last proved it was alive; nil if unknown.
     ///   - holderIsSameApp: holder's PID verified to be this app, owned by this user.
+    ///   - tuning: thresholds (CLI-overridable, see LifecycleTuning.swift).
     static func verdict(startedBySupervisor: Bool,
                         contendedLaunches: Int,
                         heartbeatAge: TimeInterval?,
-                        holderIsSameApp: Bool) -> HolderVerdict {
+                        holderIsSameApp: Bool,
+                        tuning: LifecycleTuning = .standard) -> HolderVerdict {
         // Only a supervised launch may judge the holder; manual launches just activate it.
         guard startedBySupervisor else { return .leaveAlone }
 
         // Unknown age is NOT evidence of a hang: it could be a healthy holder we can't read.
-        guard let heartbeatAge, heartbeatAge > staleAfter else { return .leaveAlone }
+        guard let heartbeatAge, heartbeatAge > tuning.staleAfter else { return .leaveAlone }
 
         // Stale. Keep retrying (launchd re-launches us) until the strike limit, and never kill
         // something that isn't verifiably this app.
-        guard contendedLaunches >= strikesBeforeKill, holderIsSameApp else { return .retryLater }
+        guard contendedLaunches >= tuning.strikesBeforeKill, holderIsSameApp else { return .retryLater }
         return .kill
     }
 }

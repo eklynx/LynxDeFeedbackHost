@@ -221,14 +221,64 @@ struct StaleHolderPolicyTests {
 
     @Test func aStaleHolderIsRetriedBeforeTheStrikeLimit() {
         #expect(verdict(strikes: 1) == .retryLater)
-        #expect(verdict(strikes: StaleHolderPolicy.strikesBeforeKill - 1) == .retryLater)
+        #expect(verdict(strikes: LifecycleTuning.defaultStrikesBeforeKill - 1) == .retryLater)
     }
 
     @Test func aStaleHolderIsKilledAtTheStrikeLimit() {
-        #expect(verdict(strikes: StaleHolderPolicy.strikesBeforeKill) == .kill)
+        #expect(verdict(strikes: LifecycleTuning.defaultStrikesBeforeKill) == .kill)
     }
 
     @Test func neverKillsAProcessThatIsNotThisApp() {
         #expect(verdict(strikes: 99, sameApp: false) == .retryLater)
+    }
+}
+
+// MARK: - Tuning overrides
+
+struct LifecycleTuningTests {
+
+    private func defaults() -> UserDefaults {
+        let suite = "lifecycle-tuning-\(UUID().uuidString)"
+        let d = UserDefaults(suiteName: suite)!
+        d.removePersistentDomain(forName: suite)
+        return d
+    }
+
+    @Test func usesDefaultsWhenNothingIsSet() {
+        #expect(LifecycleTuning(from: defaults()) == LifecycleTuning())
+    }
+
+    @Test func readsIndividualKeys() {
+        let d = defaults()
+        d.set(1.0, forKey: LifecycleTuning.Key.heartbeatInterval)
+        d.set(40.0, forKey: LifecycleTuning.Key.staleAfter)
+        d.set(5, forKey: LifecycleTuning.Key.strikesBeforeKill)
+        let t = LifecycleTuning(from: d)
+        #expect(t.heartbeatInterval == 1)
+        #expect(t.staleAfter == 40)
+        #expect(t.strikesBeforeKill == 5)
+    }
+
+    @Test func clampsNonsenseInsteadOfBreakingStartup() {
+        let d = defaults()
+        d.set(0.0, forKey: LifecycleTuning.Key.heartbeatInterval)
+        d.set(0.0, forKey: LifecycleTuning.Key.strikesBeforeKill)
+        let t = LifecycleTuning(from: d)
+        #expect(t.heartbeatInterval == 0.5)
+        #expect(t.strikesBeforeKill == 1)
+    }
+
+    @Test func staleThresholdKeepsAMarginOverTheHeartbeat() {
+        let d = defaults()
+        d.set(10.0, forKey: LifecycleTuning.Key.heartbeatInterval)
+        d.set(5.0, forKey: LifecycleTuning.Key.staleAfter)
+        #expect(LifecycleTuning(from: d).staleAfter == 30)
+    }
+
+    @Test func policyHonoursACustomStaleThreshold() {
+        var t = LifecycleTuning(); t.staleAfter = 60; t.strikesBeforeKill = 1
+        let v = StaleHolderPolicy.verdict(startedBySupervisor: true, contendedLaunches: 5,
+                                          heartbeatAge: 30, holderIsSameApp: true, tuning: t)
+        #expect(v == .leaveAlone, "30 s is healthy when the threshold is 60 s")
     }
 }
