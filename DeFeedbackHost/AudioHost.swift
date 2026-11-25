@@ -657,6 +657,7 @@ final class AudioHost {
 
         isRestoring = false
         lastSavedSettings = settings
+        watchExternalPreferenceChanges()
         startAutosaveTask()
         saveOnTermination()
 
@@ -768,6 +769,49 @@ final class AudioHost {
     
     // MARK: - Save Settings
 
+    // MARK: - External preference changes (defaults write)
+
+    @ObservationIgnored private var defaultsObserver: NSObjectProtocol?
+
+    private func watchExternalPreferenceChanges() {
+        defaultsObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: defaults,
+            queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applyExternalPreferences() }
+        }
+    }
+
+    /// Applies edits made to the individual preference keys (for example `defaults write`) to the
+    /// running host. Buffer size and parallel rendering are locked while running, so those wait and
+    /// are re-checked when the host stops. Invalid values are ignored.
+    func applyExternalPreferences() {
+        guard !isRestoring else { return }
+
+        let current = currentSettings().preferences
+        let external = HostPreferences.read(from: defaults, fallback: current)
+        guard external != current else { return }
+
+        var applied = lastSavedSettings?.preferences ?? current
+
+        if external.autoRunOnStartup != autoRunOnStartup { autoRunOnStartup = external.autoRunOnStartup }
+        if external.newInstancesStartMuted != newInstancesMuted { newInstancesMuted = external.newInstancesStartMuted }
+        if external.newInstancesStartBypassed != newInstancesBypassed { newInstancesBypassed = external.newInstancesStartBypassed }
+        applied.autoRunOnStartup = external.autoRunOnStartup
+        applied.newInstancesStartMuted = external.newInstancesStartMuted
+        applied.newInstancesStartBypassed = external.newInstancesStartBypassed
+
+        if !isRunning {
+            if external.parallelRendering != parallelRendering { parallelRendering = external.parallelRendering }
+            if external.bufferSize != bufferSize { bufferSize = external.bufferSize }
+            applied.parallelRendering = external.parallelRendering
+            applied.bufferSize = external.bufferSize
+        }
+
+        // What the defaults now hold counts as saved, so the next save doesn't rewrite it.
+        lastSavedSettings?.preferences = applied
+    }
+
     private func settingsChanged() {
         guard !isRestoring else { return }
         settingsAreDirty = true
@@ -806,7 +850,7 @@ final class AudioHost {
 
         guard settings != lastSavedSettings else { return }
 
-        SettingsStore.save(settings, to: defaults)
+        SettingsStore.save(settings, previous: lastSavedSettings, to: defaults)
         lastSavedSettings = settings
     }
 
@@ -941,6 +985,9 @@ final class AudioHost {
         resumeWhenDevicesReturn = false
         teardown()
         isRunning = false
+
+        // Buffer size / parallel rendering edits made via `defaults write` while running were held back.
+        applyExternalPreferences()
 
         // natural save state point
         settingsAreDirty = true

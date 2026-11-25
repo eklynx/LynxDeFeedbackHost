@@ -381,3 +381,156 @@ struct SettingsChangeFlagTests {
         #expect(flag.consume() == true)
     }
 }
+
+// MARK: - Individual preference keys (CLI-settable)
+
+struct HostPreferencesTests {
+
+    private let domainKeys = HostPreferences.Key.self
+
+    @Test func savingWritesEachPreferenceToItsOwnKey() {
+        withTemporaryDefaults { defaults in
+            var settings = HostSettings()
+            settings.autoRunOnStartup = true
+            settings.newInstancesStartMuted = true
+            settings.parallelRendering = true
+            settings.bufferSize = 64
+            SettingsStore.save(settings, to: defaults)
+
+            #expect(defaults.bool(forKey: "Host.autoRunOnStartup") == true)
+            #expect(defaults.bool(forKey: "Host.newInstancesStartMuted") == true)
+            #expect(defaults.bool(forKey: "Host.newInstancesStartBypassed") == false)
+            #expect(defaults.bool(forKey: "Host.parallelRendering") == true)
+            #expect(defaults.integer(forKey: "Host.bufferSize") == 64)
+        }
+    }
+
+    @Test func theBlobNoLongerHoldsThem() throws {
+        withTemporaryDefaults { defaults in
+            var settings = HostSettings()
+            settings.autoRunOnStartup = true
+            settings.bufferSize = 64
+            SettingsStore.save(settings, to: defaults)
+
+            let json = String(decoding: defaults.data(forKey: SettingsStore.defaultsKey) ?? Data(), as: UTF8.self)
+            for name in ["autoRunOnStartup", "newInstancesStart", "parallelRendering", "bufferSize"] {
+                #expect(!json.contains(name), "\(name) must live only in its own key")
+            }
+        }
+    }
+
+    @Test func anOldBlobMigratesIntoTheKeys() {
+        withTemporaryDefaults { defaults in
+            let legacy = #"{"bufferSize":128,"autoRunOnStartup":true,"newInstancesStartMuted":true,"parallelRendering":true}"#
+            defaults.set(Data(legacy.utf8), forKey: SettingsStore.defaultsKey)
+
+            let loaded = SettingsStore.load(from: defaults)
+            #expect(loaded.bufferSize == 128)
+            #expect(loaded.autoRunOnStartup)
+            #expect(loaded.newInstancesStartMuted)
+            #expect(loaded.parallelRendering)
+
+            // Migrated: the keys now exist, so `defaults read` works and they win from here on.
+            #expect(defaults.integer(forKey: "Host.bufferSize") == 128)
+            #expect(defaults.bool(forKey: "Host.autoRunOnStartup"))
+        }
+    }
+
+    @Test func aFreshInstallCreatesDiscoverableDefaults() {
+        withTemporaryDefaults { defaults in
+            _ = SettingsStore.load(from: defaults)
+            for key in HostPreferences.Key.all {
+                #expect(defaults.object(forKey: key) != nil, "\(key) should exist after first load")
+            }
+        }
+    }
+
+    @Test func anIndividualKeyBeatsTheBlob() {
+        withTemporaryDefaults { defaults in
+            var settings = HostSettings()
+            settings.bufferSize = 64
+            SettingsStore.save(settings, to: defaults)
+
+            defaults.set(256, forKey: "Host.bufferSize")           // `defaults write … -int 256`
+            #expect(SettingsStore.load(from: defaults).bufferSize == 256)
+        }
+    }
+
+    @Test func cliStyleValuesAreUnderstood() {
+        withTemporaryDefaults { defaults in
+            defaults.set("YES", forKey: "Host.autoRunOnStartup")   // `-string YES`
+            defaults.set(1, forKey: "Host.parallelRendering")      // `-int 1`
+            defaults.set("128", forKey: "Host.bufferSize")         // `-string 128`
+            let loaded = SettingsStore.load(from: defaults)
+            #expect(loaded.autoRunOnStartup)
+            #expect(loaded.parallelRendering)
+            #expect(loaded.bufferSize == 128)
+        }
+    }
+
+    @Test func invalidValuesAreIgnoredNotFatal() {
+        withTemporaryDefaults { defaults in
+            defaults.set("banana", forKey: "Host.autoRunOnStartup")
+            defaults.set(999, forKey: "Host.bufferSize")           // not an offered size
+            let loaded = SettingsStore.load(from: defaults)
+            #expect(loaded.autoRunOnStartup == false)
+            #expect(loaded.bufferSize == PluginConfiguration.defaultBufferSize)
+        }
+    }
+
+    @Test func savingNeverClobbersAnEditItHasNotSeen() {
+        withTemporaryDefaults { defaults in
+            var saved = HostSettings()
+            saved.bufferSize = 64
+            SettingsStore.save(saved, to: defaults)
+
+            defaults.set(256, forKey: "Host.bufferSize")           // CLI edit while the app runs
+
+            var next = saved
+            next.selectedInstanceIndex = 3                          // unrelated in-app change
+            SettingsStore.save(next, previous: saved, to: defaults)
+
+            #expect(defaults.integer(forKey: "Host.bufferSize") == 256)
+        }
+    }
+
+    @Test func anInAppChangeIsWritten() {
+        withTemporaryDefaults { defaults in
+            var saved = HostSettings()
+            SettingsStore.save(saved, to: defaults)
+            saved.autoRunOnStartup = false
+            var next = saved
+            next.autoRunOnStartup = true
+            SettingsStore.save(next, previous: saved, to: defaults)
+            #expect(defaults.bool(forKey: "Host.autoRunOnStartup"))
+        }
+    }
+
+    @Test func clearingRemovesTheKeysToo() {
+        withTemporaryDefaults { defaults in
+            SettingsStore.save(HostSettings(), to: defaults)
+            SettingsStore.clear(from: defaults)
+            for key in HostPreferences.Key.all { #expect(defaults.object(forKey: key) == nil) }
+        }
+    }
+
+    @Test @MainActor func aRunningHostAppliesExternalEdits() async {
+        let name = "DeFeedbackHostTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+
+        let host = AudioHost(defaults: defaults)
+        await host.loadApplicationState()
+        guard !host.isRunning else { return }
+
+        defaults.set(true, forKey: "Host.autoRunOnStartup")
+        defaults.set(true, forKey: "Host.newInstancesStartBypassed")
+        defaults.set(256, forKey: "Host.bufferSize")
+        defaults.set(777, forKey: "Host.parallelRendering")        // nonsense but truthy; must not crash
+        host.applyExternalPreferences()
+
+        #expect(host.autoRunOnStartup)
+        #expect(host.newInstancesBypassed)
+        #expect(host.bufferSize == 256)
+    }
+}
