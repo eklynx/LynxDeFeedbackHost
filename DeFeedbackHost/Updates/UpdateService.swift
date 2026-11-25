@@ -57,7 +57,7 @@ final class UpdateService: UpdateStatusSource, WarningSource {
         return [AppWarning(id: "update",
                            kind: .updateAvailable,
                            message: "Version \(version) is available. Install it from the app on the host Mac.",
-                           link: status.releasesPage,
+                           link: status.releaseNotesURL,
                            linkTitle: "Release notes")]
     }
 
