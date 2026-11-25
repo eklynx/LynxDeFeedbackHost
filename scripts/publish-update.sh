@@ -23,10 +23,8 @@
 #                            never written to disk or a command line.
 #   (unset)                  falls back to the login-keychain key for SPARKLE_KEYCHAIN_ACCOUNT.
 #   SPARKLE_KEYCHAIN_ACCOUNT keychain account of the key (default DeFeedbackHost).
-# Both halves of the key are backed up in 1Password: vault "Dev - Lynx DeFeedback Host", item
-# "Sparkle EdDSA signing key (DeFeedbackHost updates)". For CI:
-#   op item get "Sparkle EdDSA signing key (DeFeedbackHost updates)" \
-#      --vault "Dev - Lynx DeFeedback Host" --fields "label=SPARKLE_ED_PRIVATE_KEY (private)" --reveal
+# To use the key in CI, export it once with `generate_keys --account DeFeedbackHost -x <file>` and
+# store the file contents as the SPARKLE_ED_PRIVATE_KEY secret. Keep an offline backup of it too.
 # Other environment:
 #   SPARKLE_BIN   directory containing sign_update (default: the SPM artifact in derived data).
 #   GITHUB_REPO   owner/name for download URLs (default eklynx/LynxDeFeedbackHost).
@@ -50,7 +48,7 @@ while [ $# -gt 0 ]; do
         --site-dir) SITE_DIR="${2:?}"; shift 2 ;;
         --min-os) MIN_OS="${2:?}"; shift 2 ;;
         --upload) UPLOAD=YES; shift ;;
-        -h|--help) sed -n '2,38p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,33p' "$0"; exit 0 ;;
         *) die "unknown option: $1" ;;
     esac
 done

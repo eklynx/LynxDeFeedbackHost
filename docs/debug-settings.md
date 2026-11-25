@@ -99,8 +99,6 @@ Not defaults keys. For release tooling, set in the shell (or CI), not in the app
 | `GITHUB_REPO` | same | `owner/name` for download URLs (default `eklynx/LynxDeFeedbackHost`). |
 | `SPARKLE_PUBLIC_ED_KEY` (build setting) | `SparkleInfo.plist` | Public half of the signing key, baked into `SUPublicEDKey`. |
 
-All project secrets are stored in the 1Password vault `Dev - Lynx DeFeedback Host`.
-
 ## Set by the test host (don't set by hand)
 
 `XCTestConfigurationFilePath` (environment): present when unit tests run hosted in the app. The app

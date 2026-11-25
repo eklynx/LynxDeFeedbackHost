@@ -49,7 +49,7 @@ Spec: `docs/updates-spec.md`. Contract: `DeFeedbackHost/Updates/UpdateChecking.s
 - **Embed Frameworks phase removed.** A hand-written embed phase referencing the package product failed ("Sparkle-product" not found); Xcode embeds `Sparkle.framework` into `Contents/Frameworks` by itself. Verified in the built app.
 - **Sparkle keys live in `DeFeedbackHost/Updates/SparkleInfo.plist`**, wired with `INFOPLIST_FILE`, merged with the generated plist. Xcode silently ignores custom `INFOPLIST_KEY_SU*` build settings (verified: they never reached Info.plist). The file is excluded from the target's resources via the existing exception set.
 - `SUPublicEDKey` comes from the `SPARKLE_PUBLIC_ED_KEY` build setting (set to the DeFeedbackHost key's public half).
-- **Signing key** is a dedicated one under keychain account `DeFeedbackHost` (a different, pre-existing Sparkle key was in the keychain and deliberately not reused). Both halves are in 1Password: vault `Dev - Lynx DeFeedback Host`, item `Sparkle EdDSA signing key (DeFeedbackHost updates)`. All secrets for this project live in that vault.
+- **Signing key** is a dedicated one under keychain account `DeFeedbackHost` (a different, pre-existing Sparkle key was in the keychain and deliberately not reused). The private half must be backed up offline by the maintainer; losing it means existing installs can never verify an update.
 
 ## Things to know / tradeoffs
 - **Pre-existing, not touched:** `DeFeedbackHost/Info.plist` (with `LSMultipleInstancesProhibited`) is not actually used by the build (the key is absent from the built app, and the file lands in Resources). I did not point `INFOPLIST_FILE` at it because enabling that key would change launch behavior.
