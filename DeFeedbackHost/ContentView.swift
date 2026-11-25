@@ -33,12 +33,16 @@ struct ContentView: View {
                 errorBanner(message)
             }
 
-            UpdateBanner()
-
             Divider()
             gallery
         }
+        // The minimum height is for the controls and gallery only. The update banner sits in a
+        // top inset so its height is ADDED to the window's required size instead of being taken
+        // out of the gallery (which cut off the mute/bypass row at the bottom).
         .frame(minWidth: 820, minHeight: 900)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            UpdateBanner()
+        }
         // Application state is loaded by AppDelegate so it doesn't depend on this window existing.
 
         // instance removal confirmation dialog.
