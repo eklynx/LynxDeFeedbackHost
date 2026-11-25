@@ -306,6 +306,16 @@
     margin-bottom: 1rem;
   }
   #notice[hidden] { display: none; }
+
+  #update-banner {
+    border-left: 3px solid var(--accent, currentColor);
+    background: color-mix(in srgb, var(--accent, currentColor) 10%, transparent);
+    padding: 0.7rem 0.9rem;
+    border-radius: 0.35rem;
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+  }
+  #update-banner[hidden] { display: none; }
 </style>
 </head>
 <body>
@@ -316,6 +326,12 @@
   </header>
 
   <p id="notice" hidden role="alert"></p>
+
+  <p id="update-banner" hidden role="status">
+    <span id="update-text"></span>
+    <a id="update-link" href="#" target="_blank" rel="noopener noreferrer">Release notes</a>
+    <span class="caption"> — install it from the app on the host Mac.</span>
+  </p>
 
   <section class="panel">
     <button id="transport" type="button" disabled>—</button>
@@ -1226,7 +1242,27 @@ function connect() {
   });
 }
 
+/* Update availability. Read-only: the page can say a new version exists, never install it.
+   Polled slowly because the app only learns of a release every hour at the very most. */
+async function checkForUpdate() {
+  try {
+    const response = await fetch("/api/update", { cache: "no-store" });
+    if (!response.ok) return;
+    const update = await response.json();
+    const banner = el("update-banner");
+    banner.hidden = !update.available;
+    if (update.available) {
+      el("update-text").textContent = "Version " + update.version + " is available.";
+      el("update-link").href = update.releasesURL;
+    }
+  } catch (error) {
+    /* The banner is a convenience; stay quiet when the host is unreachable. */
+  }
+}
+
 connect();
+checkForUpdate();
+setInterval(checkForUpdate, 5 * 60 * 1000);
 </script>
 </body>
 </html>

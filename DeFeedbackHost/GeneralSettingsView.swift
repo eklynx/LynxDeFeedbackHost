@@ -82,6 +82,8 @@ struct GeneralSettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
+
+            UpdateSettingsSection()
         }
         .formStyle(.grouped)
         .frame(width: 440)

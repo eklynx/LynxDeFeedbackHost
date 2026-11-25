@@ -47,6 +47,9 @@ else
     /usr/libexec/PlistBuddy -c "Add :com.apple.security.device.audio-input bool true" "${ENTITLEMENTS}"
 fi
 
+# Sparkle's nested code must be signed first (inside-out) or notarization rejects the app.
+"${PROJECT_DIR}/scripts/sign-sparkle.sh" "${STAGED_APP}" "${SIGN_IDENTITY}"
+
 # Xcode signs the product only after every build phase has run, so the staged
 # copy is not signed yet. Sign it for distribution: hardened runtime + timestamp.
 codesign --force --options runtime --timestamp \

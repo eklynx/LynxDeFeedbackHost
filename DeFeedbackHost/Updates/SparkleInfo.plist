@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Merged into the generated Info.plist (INFOPLIST_FILE + GENERATE_INFOPLIST_FILE).
+	     Xcode ignores custom INFOPLIST_KEY_* names, so Sparkle's keys live here.
+	     See DeFeedbackHost/Updates/UpdateChecking.swift and docs/updates-spec.md. -->
+
+	<!-- Appcast hosted on GitHub Pages (published by scripts/publish-update.sh). -->
+	<key>SUFeedURL</key>
+	<string>https://eklynx.github.io/LynxDeFeedbackHost/appcast.xml</string>
+
+	<!-- Public half of the EdDSA key from Sparkle's `generate_keys`. Set the
+	     SPARKLE_PUBLIC_ED_KEY build setting (empty => updates report "not configured"). -->
+	<key>SUPublicEDKey</key>
+	<string>$(SPARKLE_PUBLIC_ED_KEY)</string>
+
+	<!-- Sparkle must never act on its own: the app schedules silent probes itself and
+	     only a user click starts an install (issue #7, rule 5). -->
+	<key>SUEnableAutomaticChecks</key>
+	<false/>
+	<key>SUAutomaticallyUpdate</key>
+	<false/>
+	<key>SUAllowsAutomaticUpdates</key>
+	<false/>
+</dict>
+</plist>

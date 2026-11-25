@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		9B45F203307C3293002C2A5F /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 9B45F202307C328B002C2A5F /* LICENSE */; };
+		9B5A00030000000000000003 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 9B5A00020000000000000002 /* Sparkle */; };
 		9B7EDE463076373B00860000 /* com.eklynx.sound.defeedback.streamDeckPlugin in Copy Stream Deck Plugin in to application  bundle */ = {isa = PBXBuildFile; fileRef = 9B7EDE453076371600860000 /* com.eklynx.sound.defeedback.streamDeckPlugin */; };
 		9BD3C6523062178E00E7158D /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 9BD3C62D3062178E00E7158D /* README.md */; };
 /* End PBXBuildFile section */
@@ -107,6 +108,7 @@
 			membershipExceptions = (
 				com.eklynx.sound.DeFeedbackHost.login.plist,
 				com.eklynx.sound.DeFeedbackHost.supervisor.plist,
+				Updates/SparkleInfo.plist,
 			);
 			target = 9B928131305B937A003DD310 /* DeFeedbackHost */;
 		};
@@ -149,6 +151,7 @@
 		9B92812F305B937A003DD310 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				9B5A00030000000000000003 /* Sparkle in Frameworks */,
 			);
 		};
 		9B92813C305B937B003DD310 /* Frameworks */ = {
@@ -364,6 +367,9 @@
 				9B928134305B937A003DD310 /* DeFeedbackHost */,
 			);
 			name = DeFeedbackHost;
+			packageProductDependencies = (
+				9B5A00020000000000000002 /* Sparkle */,
+			);
 			productName = DeFeedbackHost;
 			productReference = 9B928132305B937A003DD310 /* DeFeedbackHost.app */;
 			productType = "com.apple.product-type.application";
@@ -442,6 +448,9 @@
 			);
 			mainGroup = 9B928129305B937A003DD310;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				9B5A00010000000000000001 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 9B928133305B937A003DD310 /* Products */;
 			projectDirPath = "";
@@ -587,6 +596,9 @@
 				"else",
 				"    /usr/libexec/PlistBuddy -c \"Add :com.apple.security.device.audio-input bool true\" \"${ENTITLEMENTS}\"",
 				"fi",
+				"",
+				"# Sparkle's nested code must be signed first (inside-out) or notarization rejects the app.",
+				"\"${PROJECT_DIR}/scripts/sign-sparkle.sh\" \"${STAGED_APP}\" \"${SIGN_IDENTITY}\"",
 				"",
 				"# Xcode signs the product only after every build phase has run, so the staged",
 				"# copy is not signed yet. Sign it for distribution: hardened runtime + timestamp.",
@@ -799,6 +811,7 @@
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DeFeedbackHost/Updates/SparkleInfo.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Lynx DeFeedback Host";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Edgars Klepers. All rights reserved.";
@@ -833,6 +846,7 @@
 				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
 				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = NO;
 				SDKROOT = auto;
+				SPARKLE_PUBLIC_ED_KEY = "uVGZkcR8H7q0Ilvw7Bm5YCThp3QTeqewOiQlL50aZi0=";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -863,6 +877,7 @@
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DeFeedbackHost/Updates/SparkleInfo.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Lynx DeFeedback Host";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Edgars Klepers. All rights reserved.";
@@ -897,6 +912,7 @@
 				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
 				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = NO;
 				SDKROOT = auto;
+				SPARKLE_PUBLIC_ED_KEY = "uVGZkcR8H7q0Ilvw7Bm5YCThp3QTeqewOiQlL50aZi0=";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -1049,6 +1065,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		9B5A00010000000000000001 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = exactVersion;
+				version = 2.10.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		9B5A00020000000000000002 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9B5A00010000000000000001 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 9B92812A305B937A003DD310 /* Project object */;
 	validationLevel = 1;

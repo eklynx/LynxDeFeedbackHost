@@ -20,6 +20,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let web: WebControlService
 
     private let lock: InstanceLock = FileInstanceLock.standard()
+
+    /// Opt-in update checking (issue #7). Contract: `Updates/UpdateChecking.swift`. Lazy because
+    /// the relaunch hook needs `lock`, and so nothing Sparkle-related exists before launch policy.
+    lazy var updates: UpdateService = {
+        var engine: UpdateEngine
+        if Self.isRunningUnderXCTest {
+            engine = InertUpdateEngine()
+        } else {
+            // Sparkle quits this process and starts the new one; free the lock for it first.
+            engine = SparkleUpdateEngine(willRelaunch: { [lock] in lock.release() })
+        }
+        #if DEBUG
+        // Debug builds only: `defaults write … Updates.simulateVersion -string 9.9.9`.
+        if !Self.isRunningUnderXCTest, let simulated = SimulatedUpdateEngine.fromDefaults() {
+            engine = simulated
+        }
+        #endif
+        return UpdateService(engine: engine)
+    }()
     private var heartbeatTimer: Timer?
     private var sigtermSource: DispatchSourceSignal?
 
@@ -67,6 +86,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        web.updateSource = updates
+        if !Self.isRunningUnderXCTest {
+            updates.start()   // probes now only if the user opted in
+        }
+
         // Started here rather than from a view so it doesn't depend on a window being shown.
         Task {
             await host.loadApplicationState()
