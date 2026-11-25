@@ -1,6 +1,8 @@
 ![Logo](./docs/images/icon_256x256.png)
 
 # Lynx DeFeedback Host
+[![CI](https://github.com/eklynx/LynxDeFeedbackHost/actions/workflows/ci.yml/badge.svg)](https://github.com/eklynx/LynxDeFeedbackHost/actions/workflows/ci.yml)
+
 ## Disclaimer:
 This project is in no way affiliated with Alpha Labs LLC. It just uses their DeFeedback Audio Unit that they created and uses their logo for visual identification purposes only. 
 ## Purpose:
@@ -64,6 +66,9 @@ At startup the app asks for what it needs (Microphone, Local Network) so the pro
 
 ### Updates:
 Update checking is **off by default**. Turn it on in Settings › General › Updates and pick how often to check (hourly to weekly). The app checks at startup and on that schedule, and tells you in the main window, in Settings and on the web page when a newer version exists, with a link to that release's page on [GitHub](https://github.com/eklynx/LynxDeFeedbackHost/releases). Choose a **channel**: *Release* (default, fully tested), *Pre-release* (also builds with new features and fixes that aren't fully tested) or *Nightly* (every build). It never downloads or installs anything until you choose **Update Now** (also under the application menu: **Check for Updates…**). Updates use [Sparkle](https://sparkle-project.org). The web interface only reports availability; installing is done from the app. See [docs/updates-spec.md](docs/updates-spec.md). Debug and tuning switches (including a debug-only way to simulate an available update) are listed in [docs/debug-settings.md](docs/debug-settings.md).
+
+## CI:
+GitHub Actions (`.github/workflows/ci.yml`) builds the app unsigned and runs the unit tests (`DeFeedbackHostTests`) on every pull request and push to `main`, on GitHub's hosted `xcode-27` runner (override with the `RUNNER_LABEL` repository variable). Require the `ci-ok` check in branch protection. Version numbers are derived from git tags by `scripts/compute-version.sh`. See [docs/ci.md](docs/ci.md) and [docs/versioning-spec.md](docs/versioning-spec.md).
 
 ## Donations Accepted:
 As I am currently an unemployed software engineer I have not been able to afford buying a license to the DeFeedback Plugin.  All testing has been performed using the trial version.    If you find this project useful or at least promising, I do encourage you to donate!  Donations will be used to first purchase three copies of the DeFeedback plugin, one for my main development box, the others for my live sound rig for active usage/testing of this app, as well as a backup for my laptop, because any live sound engineer needs a backup for anything critical.  After that has been achieved, further donations will go to upgrading my live sound gear that this plugin directly interfaces with such as a new mixer and dante interfaces.

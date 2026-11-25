@@ -477,7 +477,7 @@ struct SessionRestoreTests {
     /// This is the case the feature exists for, and it used to do the opposite: the selection was
     /// replaced by the system default and the next autosave wrote that over the user's choice, so
     /// plugging the interface back in didn't bring the session back — it was gone.
-    @Test @MainActor func aDeviceThatIsNotConnectedIsRememberedRatherThanReplaced() async {
+    @Test(.requiresPlugin) @MainActor func aDeviceThatIsNotConnectedIsRememberedRatherThanReplaced() async {
         let name = "DeFeedbackHostTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!
         defer { defaults.removePersistentDomain(forName: name) }

@@ -510,7 +510,7 @@ struct WebBufferSizeTests {
     ///
     /// Needs real hardware to have a range to fall outside of; returns rather than fails without
     /// it, like the device tests.
-    @Test func aSizeTheDevicesRejectBlocksStartingAndSaysWhich() {
+    @Test(.requiresPlugin) func aSizeTheDevicesRejectBlocksStartingAndSaysWhich() {
         let host = AudioHost()
         host.refreshDevices()
 
@@ -1075,7 +1075,7 @@ struct WebInstanceSettingsTests {
     ///
     /// Needs real hardware to have a bound to exceed; returns rather than fails without it, like
     /// the device tests.
-    @Test func refreshingDevicesRemembersAChannelThatNoLongerExists() async throws {
+    @Test(.requiresPlugin) func refreshingDevicesRemembersAChannelThatNoLongerExists() async throws {
         let host = AudioHost()
         host.refreshDevices()
 

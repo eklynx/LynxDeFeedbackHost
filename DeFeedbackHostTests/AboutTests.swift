@@ -97,7 +97,7 @@ struct PluginIdentityTests {
     }
 
     /// A plugin that's there is named and versioned; nothing is fabricated for one that isn't.
-    @Test func anInstalledPluginIsNamedAndVersioned() throws {
+    @Test(.requiresPlugin) func anInstalledPluginIsNamedAndVersioned() throws {
         try #require(PluginConfiguration.isInstalled,
                      "needs the configured Audio Unit registered on this machine")
         let plugin = try #require(PluginConfiguration.installedPlugin)
@@ -110,7 +110,7 @@ struct PluginIdentityTests {
 
     /// The plugin's copyright is never blank while a plugin is installed: the bundle's own line
     /// where it publishes one, the configured attribution where it doesn't.
-    @Test func anInstalledPluginIsAlwaysAttributed() throws {
+    @Test(.requiresPlugin) func anInstalledPluginIsAlwaysAttributed() throws {
         try #require(PluginConfiguration.isInstalled,
                      "needs the configured Audio Unit registered on this machine")
         let plugin = try #require(PluginConfiguration.installedPlugin)
@@ -213,7 +213,7 @@ struct PluginIdentityTests {
     /// The fallback is only reached when the plugin publishes nothing, so it has to name the
     /// plugin's maker rather than ours — an attribution that credits the wrong party is worse
     /// than a blank line.
-    @Test func theFallbackAttributionNamesTheMaker() throws {
+    @Test(.requiresPlugin) func theFallbackAttributionNamesTheMaker() throws {
         #expect(PluginConfiguration.copyrightFallback.contains("©"))
         // No year: we don't know theirs, and a wrong one is a false claim about their work.
         #expect(PluginConfiguration.copyrightFallback.rangeOfCharacter(from: .decimalDigits) == nil)

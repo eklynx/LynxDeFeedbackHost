@@ -1,0 +1,84 @@
+name: CI
+
+# Builds the app unsigned and runs the unit tests on every pull request and every push to main.
+# See docs/ci.md. Release, nightly and publishing workflows are separate.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Runner override as JSON, e.g. "xcode-27" or ["self-hosted","macOS"]. Empty uses the RUNNER_LABEL variable, then xcode-27.'
+        required: false
+        default: ''
+      run_ui_tests:
+        description: 'Also run DeFeedbackHostUITests (needs a GUI session and a signed build)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  app-build-test:
+    name: Build & unit tests
+    # GitHub's hosted Xcode 27 image (macOS 27, Apple silicon). Switch to another runner, e.g. a
+    # self-hosted Mac, with the RUNNER_LABEL repository variable; no workflow edit needed.
+    runs-on: ${{ fromJSON(inputs.runner || vars.RUNNER_LABEL || '"xcode-27"') }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # tags and history, for the build number and version scripts
+      - name: Select Xcode
+        if: ${{ vars.XCODE_PATH != '' }}
+        run: sudo xcode-select -s "${{ vars.XCODE_PATH }}"
+      - name: Toolchain info
+        run: |
+          xcodebuild -version
+          sw_vers
+      - name: Test
+        env:
+          RUN_UI_TESTS: ${{ inputs.run_ui_tests }}
+        run: |
+          set -o pipefail
+          ONLY="-only-testing:DeFeedbackHostTests"
+          if [ "$RUN_UI_TESTS" = "true" ]; then ONLY=""; fi
+          xcodebuild test \
+            -project DeFeedbackHost.xcodeproj \
+            -scheme DeFeedbackHost \
+            -destination 'platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -resultBundlePath "$RUNNER_TEMP/TestResults.xcresult" \
+            $ONLY \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" \
+            | tee "$RUNNER_TEMP/xcodebuild.log"
+      - name: Upload results
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results
+          path: |
+            ${{ runner.temp }}/TestResults.xcresult
+            ${{ runner.temp }}/xcodebuild.log
+
+  # The one check to require in branch protection: it fails if any job above failed, was
+  # cancelled or was skipped, so adding jobs later only means adding them to `needs`.
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [app-build-test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: All required jobs passed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS"
+          test "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}" = "false"
