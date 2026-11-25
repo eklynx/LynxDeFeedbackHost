@@ -31,6 +31,11 @@ Workflow: `.github/workflows/release.yml` (Actions › **Release** › Run workf
   publish, and attaches the DMG to the run so you can try it.
 - The version is computed from git tags (`docs/versioning-spec.md`); you never type one.
 
+## Renewing the certificate
+
+The `cert-expiry` workflow opens an issue when the certificate is close to expiry. The renewal steps
+are in `docs/cert-expiry.md`.
+
 ## When something fails
 
 - **Notarization not accepted:** the log shows Apple's verdict. Get the details with

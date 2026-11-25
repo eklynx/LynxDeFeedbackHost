@@ -35,6 +35,11 @@ Actions › Variables:
 
 A manual run (Actions › CI › Run workflow) can override the runner and include the UI tests.
 
+## Certificate expiry reminder
+
+A weekly workflow (`cert-expiry`) checks when the Developer ID certificate expires and opens a
+reminder issue when 15 days or fewer are left. See `docs/cert-expiry.md`.
+
 ## Versions
 
 Version numbers come from git tags via `scripts/compute-version.sh`; see
