@@ -70,6 +70,9 @@ Update checking is **off by default**. Turn it on in Settings › General › Up
 ## CI:
 GitHub Actions (`.github/workflows/ci.yml`) builds the app unsigned and runs the unit tests (`DeFeedbackHostTests`) on every pull request and push to `main`, on GitHub's hosted `xcode-27` runner (override with the `RUNNER_LABEL` repository variable). Require the `ci-ok` check in branch protection. Version numbers are derived from git tags by `scripts/compute-version.sh`. See [docs/ci.md](docs/ci.md) and [docs/versioning-spec.md](docs/versioning-spec.md).
 
+## Releasing:
+Releases are made by hand from GitHub: Actions › **Release** › Run workflow. It computes the version from git tags, builds, signs with Developer ID, notarizes, publishes a GitHub Release with the DMG and adds the update to the Sparkle appcast. A *dry run* option does everything except publish. One-time setup (the `release` environment and its secrets) and recovery steps: [docs/release.md](docs/release.md); rules: [docs/release-spec.md](docs/release-spec.md).
+
 ## Donations Accepted:
 As I am currently an unemployed software engineer I have not been able to afford buying a license to the DeFeedback Plugin.  All testing has been performed using the trial version.    If you find this project useful or at least promising, I do encourage you to donate!  Donations will be used to first purchase three copies of the DeFeedback plugin, one for my main development box, the others for my live sound rig for active usage/testing of this app, as well as a backup for my laptop, because any live sound engineer needs a backup for anything critical.  After that has been achieved, further donations will go to upgrading my live sound gear that this plugin directly interfaces with such as a new mixer and dante interfaces.
 So if you wish to donate, click on the '[Sponsor](https://github.com/sponsors/eklynx)' button above!

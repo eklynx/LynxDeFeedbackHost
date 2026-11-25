@@ -33,6 +33,9 @@
 # Other environment:
 #   SPARKLE_BIN   directory containing sign_update (default: the SPM artifact in derived data).
 #   GITHUB_REPO   owner/name for download URLs (default eklynx/LynxDeFeedbackHost).
+#   RELEASE_TARGET  commit the new tag should point at (with --upload). CI sets it to the commit it
+#                 built, so the tag lands on the tested code even if main moved meanwhile. Unset: the
+#                 repository's default branch head.
 #
 # Publishing the feed: commit the contents of --site-dir to the `gh-pages` branch (Pages source).
 # The app's SUFeedURL is https://eklynx.github.io/LynxDeFeedbackHost/appcast.xml.
@@ -55,7 +58,7 @@ while [ $# -gt 0 ]; do
         --channel) CHANNEL="${2:?}"; shift 2 ;;
         --tag) TAG="${2:?}"; shift 2 ;;
         --upload) UPLOAD=YES; shift ;;
-        -h|--help) sed -n '2,37p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,41p' "$0"; exit 0 ;;
         *) die "unknown option: $1" ;;
     esac
 done
@@ -146,10 +149,12 @@ if [ "${UPLOAD}" = "YES" ]; then
         gh release upload "${TAG}" "${DMG}" --repo "${GITHUB_REPO}" --clobber
     else
         if [ "${CHANNEL}" = "release" ]; then
-            gh release create "${TAG}" "${DMG}" --repo "${GITHUB_REPO}" --title "${TAG}" --generate-notes
+            gh release create "${TAG}" "${DMG}" --repo "${GITHUB_REPO}" --title "${TAG}" --generate-notes \
+                ${RELEASE_TARGET:+--target "${RELEASE_TARGET}"}
         else
             gh release create "${TAG}" "${DMG}" --repo "${GITHUB_REPO}" --title "${TAG}" \
-                --prerelease --latest=false --generate-notes
+                --prerelease --latest=false --generate-notes \
+                ${RELEASE_TARGET:+--target "${RELEASE_TARGET}"}
         fi
     fi
 fi
