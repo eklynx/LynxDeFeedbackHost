@@ -24,10 +24,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Opt-in update checking (issue #7). Contract: `Updates/UpdateChecking.swift`. Lazy because
     /// the relaunch hook needs `lock`, and so nothing Sparkle-related exists before launch policy.
     lazy var updates: UpdateService = {
-        let engine: UpdateEngine = Self.isRunningUnderXCTest
-            ? InertUpdateEngine()
+        var engine: UpdateEngine
+        if Self.isRunningUnderXCTest {
+            engine = InertUpdateEngine()
+        } else {
             // Sparkle quits this process and starts the new one; free the lock for it first.
-            : SparkleUpdateEngine(willRelaunch: { [lock] in lock.release() })
+            engine = SparkleUpdateEngine(willRelaunch: { [lock] in lock.release() })
+        }
+        #if DEBUG
+        // Debug builds only: `defaults write … Updates.simulateVersion -string 9.9.9`.
+        if !Self.isRunningUnderXCTest, let simulated = SimulatedUpdateEngine.fromDefaults() {
+            engine = simulated
+        }
+        #endif
         return UpdateService(engine: engine)
     }()
     private var heartbeatTimer: Timer?

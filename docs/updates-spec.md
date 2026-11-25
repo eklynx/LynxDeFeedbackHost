@@ -2,7 +2,7 @@
 
 Source of truth in code: `DeFeedbackHost/Updates/UpdateChecking.swift` (contract), implemented by
 `UpdateService`, `UpdateScheduler`, `UpdatePreferences` and `SparkleUpdateEngine`.
-Tests: `DeFeedbackHostTests/UpdateTests.swift` (rules U1–U15). Origin: GitHub issue #7.
+Tests: `DeFeedbackHostTests/UpdateTests.swift` (rules U1–U16). Origin: GitHub issue #7.
 
 ## Model
 
@@ -30,6 +30,7 @@ GitHub Release assets.
 | U13 | `/api/update` is documented in `openapi.yaml` (route conformance). | `OpenAPIConformanceTests.everyRouteIsDocumented` |
 | U14 | The built Info.plist sets `SUEnableAutomaticChecks` and `SUAutomaticallyUpdate` to false and an https `SUFeedURL`. | `sparkleNeverActsOnItsOwn` |
 | U15 | The Sparkle-facing engine is inert under XCTest, so tests never start Sparkle or touch the network. | `inertEngineNeverCallsSparkle` |
+| U16 | Debug builds only: `defaults write … Updates.simulateVersion -string 9.9.9` makes every probe report that version (no network/Sparkle); the code is compiled out of release builds. | `simulatedEngineReportsVersion`, `simulationIsDebugOnly` |
 
 ## Manual checklist (not automatable)
 

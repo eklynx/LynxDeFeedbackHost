@@ -2,7 +2,7 @@
 //  UpdateTests.swift
 //  DeFeedbackHostTests
 //
-//  Covers docs/updates-spec.md rules U1–U12, U14, U15 (U13 lives in OpenAPIConformanceTests).
+//  Covers docs/updates-spec.md rules U1–U12, U14–U16 (U13 lives in OpenAPIConformanceTests).
 //
 //  - Tests initially created with AI with human edits, but all reviewed by human
 
@@ -275,5 +275,49 @@ struct UpdateTests {
         var result: ProbeResult?
         InertUpdateEngine().probe { result = $0 }
         if case .failed = result {} else { Issue.record("expected .failed, got \(String(describing: result))") }
+    }
+
+    #if DEBUG
+    @Test("U16: the simulated engine reports the configured version without any network")
+    func simulatedEngineReportsVersion() async {
+        let name = "DeFeedbackHostTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+
+        #expect(SimulatedUpdateEngine.fromDefaults(defaults) == nil)
+        defaults.set("   ", forKey: SimulatedUpdateEngine.defaultsKey)
+        #expect(SimulatedUpdateEngine.fromDefaults(defaults) == nil)
+        defaults.set("9.9.9", forKey: SimulatedUpdateEngine.defaultsKey)
+        let engine = try? #require(SimulatedUpdateEngine.fromDefaults(defaults))
+
+        var result: ProbeResult?
+        engine?.probe { result = $0 }
+        #expect(result == .updateAvailable(version: "9.9.9"))
+    }
+    #endif
+
+    @Test("U16: simulation code is compiled out of release builds")
+    func simulationIsDebugOnly() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func text(_ path: String) throws -> String {
+            try String(contentsOf: root.appending(path: path), encoding: .utf8)
+        }
+        let engine = try text("DeFeedbackHost/Updates/SimulatedUpdateEngine.swift")
+        #expect(engine.contains("\n#if DEBUG\n") && engine.hasSuffix("#endif\n"),
+                "the whole simulated engine must sit inside #if DEBUG")
+
+        // Every other mention of it must be inside a DEBUG block, so release builds can't link it.
+        for path in ["DeFeedbackHost/AppDelegate.swift", "DeFeedbackHost/Updates/UpdateViews.swift"] {
+            var depth = 0
+            for line in try text(path).split(separator: "\n") {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if trimmed.hasPrefix("#if DEBUG") { depth += 1 }
+                else if trimmed.hasPrefix("#if") { depth += 1 }
+                else if trimmed.hasPrefix("#endif") { depth -= 1 }
+                if trimmed.contains("SimulatedUpdateEngine"), !trimmed.hasPrefix("//") {
+                    #expect(depth > 0, "\(path): \"\(trimmed)\" is outside #if DEBUG")
+                }
+            }
+        }
     }
 }

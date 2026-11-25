@@ -103,3 +103,35 @@ struct UpdateBanner: View {
         }
     }
 }
+
+#if DEBUG
+// Previews use the simulated engine so the "update available" state is visible in Xcode.
+@MainActor
+private func previewService(enabled: Bool) -> UpdateService {
+    let defaults = UserDefaults(suiteName: "DeFeedbackHost.preview")!
+    defaults.set(enabled, forKey: UpdatePreferences.Key.enabled)
+    let service = UpdateService(engine: SimulatedUpdateEngine(version: "9.9.9"), defaults: defaults)
+    service.start()
+    return service
+}
+
+#Preview("Settings section, update available") {
+    Form { UpdateSettingsSection() }
+        .formStyle(.grouped)
+        .environment(previewService(enabled: true))
+        .frame(width: 440)
+}
+
+#Preview("Settings section, checking off") {
+    Form { UpdateSettingsSection() }
+        .formStyle(.grouped)
+        .environment(previewService(enabled: false))
+        .frame(width: 440)
+}
+
+#Preview("Main-window banner") {
+    UpdateBanner()
+        .environment(previewService(enabled: true))
+        .frame(width: 820)
+}
+#endif
