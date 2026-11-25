@@ -535,7 +535,7 @@
 				"ln -s /Applications \"${STAGING_DIR}/Applications\"",
 				"",
 				"rm -f \"${DMG_PATH}\"",
-				"hdiutil create -volname \"Lynx DeFeedback Host\" -srcfolder \"${STAGING_DIR}\" -format UDZO -ov \"${DMG_PATH}\"",
+				"\"${PROJECT_DIR}/scripts/make-dmg.sh\" \"${STAGING_DIR}\" \"${DMG_PATH}\" \"Lynx DeFeedback Host\"",
 				"rm -rf \"${STAGING_DIR}\"",
 				"echo \"Created ${DMG_PATH}\"",
 				"",

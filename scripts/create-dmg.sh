@@ -10,7 +10,9 @@
 #   xcrun notarytool store-credentials DeFeedbackHost-Notary \
 #       --apple-id <apple-id> --team-id <team-id> --password <app-specific-password>
 # Override the profile name with NOTARY_KEYCHAIN_PROFILE. Set SKIP_NOTARIZATION=YES
-# to build a signed but un-notarized image.
+# to build a signed but un-notarized image. ALLOW_UNSIGNED_DMG=YES packs the app into an UNSIGNED,
+# un-notarized image when there is no Developer ID identity (CI uses it to prove packaging works on
+# pull requests, where no certificate is available); never ship that image.
 set -eu
 
 SKIP_NOTARIZATION="${SKIP_NOTARIZATION:-NO}"
@@ -29,9 +31,15 @@ SIGN_IDENTITY="$(security find-identity -v -p codesigning \
     | grep "(${DEVELOPMENT_TEAM})" \
     | head -n 1 \
     | awk '{ print $2 }')"
+UNSIGNED=NO
 if [ -z "${SIGN_IDENTITY}" ]; then
-    echo "error: No \"Developer ID Application\" identity for team ${DEVELOPMENT_TEAM} in the keychain."
-    exit 1
+    if [ "${ALLOW_UNSIGNED_DMG:-NO}" = "YES" ]; then
+        UNSIGNED=YES
+        echo "warning: no Developer ID identity; building an UNSIGNED, un-notarized image (ALLOW_UNSIGNED_DMG=YES)."
+    else
+        echo "error: No \"Developer ID Application\" identity for team ${DEVELOPMENT_TEAM} in the keychain."
+        exit 1
+    fi
 fi
 
 rm -rf "${STAGING_DIR}"
@@ -48,23 +56,30 @@ else
     /usr/libexec/PlistBuddy -c "Add :com.apple.security.device.audio-input bool true" "${ENTITLEMENTS}"
 fi
 
-# Sparkle's nested code must be signed first (inside-out) or notarization rejects the app.
-"${PROJECT_DIR}/scripts/sign-sparkle.sh" "${STAGED_APP}" "${SIGN_IDENTITY}"
+if [ "${UNSIGNED}" = "NO" ]; then
+    # Sparkle's nested code must be signed first (inside-out) or notarization rejects the app.
+    "${PROJECT_DIR}/scripts/sign-sparkle.sh" "${STAGED_APP}" "${SIGN_IDENTITY}"
 
-# Xcode signs the product only after every build phase has run, so the staged
-# copy is not signed yet. Sign it for distribution: hardened runtime + timestamp.
-codesign --force --options runtime --timestamp \
-    --sign "${SIGN_IDENTITY}" \
-    --entitlements "${ENTITLEMENTS}" \
-    "${STAGED_APP}"
-codesign --verify --strict --verbose=2 "${STAGED_APP}"
+    # Xcode signs the product only after every build phase has run, so the staged
+    # copy is not signed yet. Sign it for distribution: hardened runtime + timestamp.
+    codesign --force --options runtime --timestamp \
+        --sign "${SIGN_IDENTITY}" \
+        --entitlements "${ENTITLEMENTS}" \
+        "${STAGED_APP}"
+    codesign --verify --strict --verbose=2 "${STAGED_APP}"
+fi
 
 ln -s /Applications "${STAGING_DIR}/Applications"
 
 rm -f "${DMG_PATH}"
-hdiutil create -volname "Lynx DeFeedback Host" -srcfolder "${STAGING_DIR}" -format UDZO -ov "${DMG_PATH}"
-codesign --force --timestamp --sign "${SIGN_IDENTITY}" "${DMG_PATH}"
+"${PROJECT_DIR}/scripts/make-dmg.sh" "${STAGING_DIR}" "${DMG_PATH}" "Lynx DeFeedback Host"
+[ "${UNSIGNED}" = "NO" ] && codesign --force --timestamp --sign "${SIGN_IDENTITY}" "${DMG_PATH}"
 rm -rf "${STAGING_DIR}" "${ENTITLEMENTS}"
+
+if [ "${UNSIGNED}" = "YES" ]; then
+    echo "Created UNSIGNED ${DMG_PATH} (not notarized; do not ship)."
+    exit 0
+fi
 
 if [ "${SKIP_NOTARIZATION}" = "YES" ]; then
     echo "warning: Skipping notarization; ${DMG_PATH} will trigger Gatekeeper on other Macs."

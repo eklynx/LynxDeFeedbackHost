@@ -33,6 +33,9 @@ removed from the runner at the end of the job even when a step fails.
 | R6 | A dry run builds, signs, notarizes and verifies, keeps the DMG as a run artifact, and publishes nothing: no tag, no GitHub Release, no appcast change. | `dryRunPublishesNothing` |
 | R7 | The tag is created on the commit that was tested (`gh release create --target`), even if `main` moved while the release ran. | `publishTagsOnTestedCommit` |
 | R8 | The appcast gets one new item on the release channel, and the `gh-pages` push retries after rebasing so a parallel appcast publish can't clobber it. | `UpdateScriptTests.publishTagsChannels` (channel item); push retry checked on the first real run |
+| R9 | The DMG is packed by `scripts/make-dmg.sh` (used by both DMG phases): a real, verifiable image; a missing source or both tools failing is a clear error. `create-dmg.sh` refuses to run without a Developer ID identity unless `ALLOW_UNSIGNED_DMG=YES`, which makes an unsigned, un-notarized image for CI only. | `makesARealImage`, `missingSourceFails`, `bothToolsFail`, `unsignedOnlyWhenAllowed` |
+| R10 | A failing `hdiutil create` is retried up to 3 times, then explained (staged folder, dangling symlinks, sizes, free space, path lengths) and retried with `diskutil image create from`; a flaky run never fails a release by itself. | `retriesAFlakyHdiutil`, `fallsBackToDiskutil` |
+| R11 | Every pull request archives the app the way a release does and packs an unsigned DMG (the `dmg-smoke` job, part of `ci-ok`), so packaging problems appear before a release. | CI job `Archive and package a DMG` |
 
 ## Manual checklist (needs the real secrets)
 
