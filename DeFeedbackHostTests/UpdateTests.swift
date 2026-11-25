@@ -2,7 +2,8 @@
 //  UpdateTests.swift
 //  DeFeedbackHostTests
 //
-//  Covers docs/updates-spec.md rules U1–U12, U14–U16 (U13 lives in OpenAPIConformanceTests).
+//  Covers docs/updates-spec.md rules U1–U12, U14–U16, U18–U22 (U13 lives in OpenAPIConformanceTests,
+//  U23–U24 in UpdateScriptTests).
 //
 //  - Tests initially created with AI with human edits, but all reviewed by human
 
@@ -16,15 +17,21 @@ import Testing
 private final class FakeEngine: UpdateEngine {
     var probeCount = 0
     var presentCount = 0
+    var probeChannels: [UpdateChannel] = []
+    var presentChannels: [UpdateChannel] = []
     var results: [ProbeResult] = []
     var fallback: ProbeResult = .upToDate
 
-    func probe(onResult: @escaping @MainActor (ProbeResult) -> Void) {
+    func probe(channel: UpdateChannel, onResult: @escaping @MainActor (ProbeResult) -> Void) {
         probeCount += 1
+        probeChannels.append(channel)
         onResult(results.isEmpty ? fallback : results.removeFirst())
     }
 
-    func presentUpdate() { presentCount += 1 }
+    func presentUpdate(channel: UpdateChannel) {
+        presentCount += 1
+        presentChannels.append(channel)
+    }
 }
 
 /// A sleep that returns instantly `budget` times, recording the delays, then parks (cancellably).
@@ -155,7 +162,7 @@ struct UpdateTests {
     @Test("U7: a found update is recorded")
     func foundUpdateIsRecorded() async {
         let engine = FakeEngine()
-        engine.fallback = .updateAvailable(version: "9.9.9")
+        engine.fallback = .updateAvailable(version: "9.9.9", link: nil)
         await withService(enabled: true, engine: engine) { service, engine, _, _ in
             service.start()
             await settle { service.status.isUpdateAvailable }
@@ -168,7 +175,7 @@ struct UpdateTests {
     @Test("U7: up to date clears a previously found update")
     func upToDateClears() async {
         let engine = FakeEngine()
-        engine.results = [.updateAvailable(version: "2.0"), .upToDate]
+        engine.results = [.updateAvailable(version: "2.0", link: nil), .upToDate]
         await withService(enabled: true, engine: engine, clock: FakeClock(budget: 1)) { service, engine, _, _ in
             service.start()
             await settle { engine.probeCount >= 2 }
@@ -179,7 +186,7 @@ struct UpdateTests {
     @Test("U8: a failed probe keeps a known update and records the error")
     func failureKeepsKnownUpdate() async {
         let engine = FakeEngine()
-        engine.results = [.updateAvailable(version: "2.0"), .failed("offline")]
+        engine.results = [.updateAvailable(version: "2.0", link: nil), .failed("offline")]
         await withService(enabled: true, engine: engine, clock: FakeClock(budget: 1)) { service, engine, _, _ in
             service.start()
             await settle { engine.probeCount >= 2 }
@@ -200,7 +207,7 @@ struct UpdateTests {
     @Test("U9: Update Now does nothing when no update is known")
     func installNowNeedsKnownUpdate() async {
         let engine = FakeEngine()
-        engine.fallback = .updateAvailable(version: "3.0")
+        engine.fallback = .updateAvailable(version: "3.0", link: nil)
         await withService(enabled: true, engine: engine) { service, engine, _, _ in
             service.installNow()
             #expect(engine.presentCount == 0)
@@ -214,7 +221,7 @@ struct UpdateTests {
     @Test("U10: background probes never start the install flow")
     func probesNeverInstall() async {
         let engine = FakeEngine()
-        engine.fallback = .updateAvailable(version: "3.0")
+        engine.fallback = .updateAvailable(version: "3.0", link: nil)
         await withService(enabled: true, engine: engine, clock: FakeClock(budget: 3)) { service, engine, _, _ in
             service.start()
             await settle { engine.probeCount >= 4 }
@@ -226,7 +233,7 @@ struct UpdateTests {
     func schedulerFloorAndSuccessDelay() {
         for interval in UpdateInterval.allCases {
             #expect(UpdateScheduler.delay(after: .upToDate, interval: interval) == interval.seconds)
-            #expect(UpdateScheduler.delay(after: .updateAvailable(version: "1"), interval: interval) == interval.seconds)
+            #expect(UpdateScheduler.delay(after: .updateAvailable(version: "1", link: nil), interval: interval) == interval.seconds)
             #expect(UpdateScheduler.delay(after: .failed("x"), interval: interval) >= UpdateScheduler.minimumDelay)
             #expect(UpdateScheduler.delay(after: .failed("x"), interval: interval) <= interval.seconds)
         }
@@ -241,7 +248,7 @@ struct UpdateTests {
     @Test("U12: /api/update reports what the app knows, without checking")
     func webPayloadReflectsStatus() async {
         let engine = FakeEngine()
-        engine.fallback = .updateAvailable(version: "4.0")
+        engine.fallback = .updateAvailable(version: "4.0", link: nil)
         await withService(enabled: true, engine: engine) { service, engine, _, _ in
             let web = WebControlService(host: AudioHost())
 
@@ -258,6 +265,103 @@ struct UpdateTests {
             #expect(payload["available"] as? Bool == true)
             #expect(payload["version"] as? String == "4.0")
             #expect(payload["releasesURL"] as? String == UpdateLinks.releasesPage.absoluteString)
+            #expect(payload["channel"] as? String == "release")
+            #expect(payload["releaseNotesURL"] as? String == UpdateLinks.releasesPage.absoluteString)
+        }
+    }
+
+    // MARK: - Channels (U18–U22)
+
+    @Test("U18: the channel defaults to release; unknown stored values fall back to it")
+    func channelDefaultsToRelease() {
+        let name = "DeFeedbackHostTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+
+        #expect(UpdatePreferences(from: defaults).channel == .release)
+        defaults.set("nightly", forKey: UpdatePreferences.Key.channel)
+        #expect(UpdatePreferences(from: defaults).channel == .nightly)
+        defaults.set("NIGHTLY!!", forKey: UpdatePreferences.Key.channel)
+        #expect(UpdatePreferences(from: defaults).channel == .release)
+        defaults.set(42, forKey: UpdatePreferences.Key.channel)
+        #expect(UpdatePreferences(from: defaults).channel == .release)
+        #expect(UpdateChannel(stored: nil) == .release)
+    }
+
+    @Test("U19: channels are cumulative; release sees only untagged items")
+    func channelsAreCumulative() {
+        #expect(UpdateChannel.release.sparkleChannels == [])
+        #expect(UpdateChannel.prerelease.sparkleChannels == ["prerelease"])
+        #expect(UpdateChannel.nightly.sparkleChannels == ["prerelease", "nightly"])
+        for channel in UpdateChannel.allCases {
+            #expect(!channel.label.isEmpty && !channel.summary.isEmpty)
+        }
+    }
+
+    @Test("U20: probes and manual checks use the chosen channel")
+    func engineIsToldTheChannel() async {
+        await withService(enabled: true) { service, engine, _, defaults in
+            service.channel = .prerelease
+            #expect(defaults.string(forKey: UpdatePreferences.Key.channel) == "prerelease")
+            service.start()
+            await settle { engine.probeCount >= 1 }
+            #expect(engine.probeChannels.last == .prerelease)
+            service.checkForUpdates()
+            #expect(engine.presentChannels == [.prerelease])
+        }
+    }
+
+    @Test("U20: switching channel clears the known update and probes at once")
+    func switchingChannelReprobes() async {
+        let engine = FakeEngine()
+        engine.results = [
+            .updateAvailable(version: "1.0.1-20261125030000.ab12cd3",
+                             link: URL(string: "https://example.com/n")),
+            .upToDate,
+        ]
+        await withService(enabled: true, engine: engine, clock: FakeClock(budget: 0)) { service, engine, _, _ in
+            service.channel = .nightly
+            service.start()
+            await settle { service.status.isUpdateAvailable }
+            #expect(service.status.availableLink?.absoluteString == "https://example.com/n")
+
+            service.channel = .release
+            #expect(service.status.availableVersion == nil)
+            #expect(service.status.availableLink == nil)
+            #expect(service.status.channel == .release)
+            await settle { engine.probeCount >= 2 }
+            #expect(engine.probeChannels.last == .release)
+        }
+    }
+
+    @Test("U21: switching channel with checking off makes no probe")
+    func switchingChannelWhenOffDoesNotProbe() async {
+        await withService { service, engine, _, defaults in
+            service.start()
+            service.channel = .nightly
+            for _ in 0..<20 { await Task.yield() }
+            #expect(engine.probeCount == 0)
+            #expect(defaults.string(forKey: UpdatePreferences.Key.channel) == "nightly")
+        }
+    }
+
+    @Test("U22: release notes link to the found release, else the releases page")
+    func releaseNotesLinkFallsBack() async {
+        var status = UpdateStatus()
+        #expect(status.releaseNotesURL == UpdateLinks.releasesPage)
+        status.availableLink = URL(string: "https://example.com/releases/tag/v2")
+        #expect(status.releaseNotesURL.absoluteString == "https://example.com/releases/tag/v2")
+
+        let engine = FakeEngine()
+        engine.fallback = .updateAvailable(version: "2.0", link: URL(string: "https://example.com/r"))
+        await withService(enabled: true, engine: engine) { service, _, _, _ in
+            let web = WebControlService(host: AudioHost())
+            web.updateSource = service
+            service.start()
+            await settle { service.status.isUpdateAvailable }
+            let payload = web.updatePayload()
+            #expect(payload["releaseNotesURL"] as? String == "https://example.com/r")
+            #expect(payload["releasesURL"] as? String == UpdateLinks.releasesPage.absoluteString)
         }
     }
 
@@ -273,7 +377,7 @@ struct UpdateTests {
     @Test("U15: the inert engine never reaches Sparkle")
     func inertEngineNeverCallsSparkle() async {
         var result: ProbeResult?
-        InertUpdateEngine().probe { result = $0 }
+        InertUpdateEngine().probe(channel: .release) { result = $0 }
         if case .failed = result {} else { Issue.record("expected .failed, got \(String(describing: result))") }
     }
 
@@ -291,8 +395,8 @@ struct UpdateTests {
         let engine = try? #require(SimulatedUpdateEngine.fromDefaults(defaults))
 
         var result: ProbeResult?
-        engine?.probe { result = $0 }
-        #expect(result == .updateAvailable(version: "9.9.9"))
+        engine?.probe(channel: .release) { result = $0 }
+        #expect(result == .updateAvailable(version: "9.9.9", link: nil))
     }
     #endif
 

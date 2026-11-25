@@ -38,11 +38,14 @@ Rules in `docs/updates-spec.md`.
 |---|---|---|---|---|
 | `Updates.enabled` | bool | `false` | on relaunch | Background update checking (opt-in). Same as the Settings toggle. |
 | `Updates.checkInterval` | int, seconds | `86400` | on relaunch | How often to check: one of `3600`, `21600`, `86400`, `604800`. Other values snap to the nearest. |
+| `Updates.channel` | string | `release` | on relaunch | Which builds to be offered: `release` (default), `prerelease` (adds not-fully-tested builds) or `nightly` (adds every build). Unknown values mean `release`. Same as the Settings picker. Changing it in Settings clears the known update and re-checks at once. |
 | `Updates.lastChecked` | float, epoch seconds | none | n/a | Written by the app (shown as "Last checked"). Don't set it; delete it to clear. |
 
 ```
 defaults write  $DOMAIN Updates.enabled -bool true
 defaults write  $DOMAIN Updates.checkInterval -int 21600          # every 6 hours
+defaults write  $DOMAIN Updates.channel -string nightly         # follow the nightly builds
+defaults delete $DOMAIN Updates.channel                            # back to release builds only
 defaults delete $DOMAIN Updates.enabled                            # off again (the default)
 defaults delete $DOMAIN Updates.checkInterval                      # back to daily
 defaults delete $DOMAIN Updates.lastChecked                        # forget the last check time

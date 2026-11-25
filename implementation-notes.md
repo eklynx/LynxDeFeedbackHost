@@ -98,3 +98,22 @@ Implemented and unit-tested (rules P1–P9). The manual checklist with real syst
 - The `set-build-number.sh` change (timestamp / `BUILD_NUMBER`) is in the update-channels PR (#17); this PR doesn't depend on it.
 - `ci-ok` only protects `main` once it is set as a required check; that is a repository setting, not a file.
 
+
+# Update channels (issue #3, app side)
+
+## Decisions not in the spec
+- **Channels are cumulative and "release" is the absence of a tag** (Sparkle's own model: an untagged item reaches everyone, a tagged one only users who list that name). `UpdateChannel.sparkleChannels` feeds `allowedChannels(for:)`; unknown stored values fall back to release so a typo can't opt anyone into nightlies.
+- **The channel is passed to the engine on every call** (`probe(channel:)`, `presentUpdate(channel:)`) instead of living in the engine, so the fake in tests records exactly what the service asked for.
+- **Switching channel clears the known update and re-probes** when checking is on. An update found on nightly may not exist on release, so keeping it would show a banner for something the new channel wouldn't offer.
+- **Release notes link** is the item's own page (`SUAppcastItem.infoURL`, else `releaseNotesURL`, else the Releases list). `/api/update` keeps `releasesURL` and adds `releaseNotesURL` and `channel`, so existing clients keep working.
+- **Build number** changed from commit count to UTC build time (or `$BUILD_NUMBER`), because it must rise across separate release and nightly workflows. The git hash still goes in `GitCommit` and, for nightlies, in the version string.
+
+## Things to know / tradeoffs
+- **Sparkle never downgrades**: moving from Nightly back to Release keeps the installed build until a newer release appears.
+- The new build numbers (14 digits) are far above the old commit counts, so nothing already built can outrank them. No release had been published yet.
+- **Not in this PR** (pipeline PR): `compute-version.sh`, marketing version from tags, the Release/Nightly/appcast workflows, keeping the last 7 nightlies (GitHub releases and feed items), a pre-release trigger, runner and secrets. `publish-update.sh` only adds items; pruning is still to do.
+- The script tests run the real shell scripts with a stub `sign_update`, so they need `/usr/bin/python3` (already required by the publish script).
+
+## Status
+Implemented and unit-tested (rules U18–U24). The real-feed check (nightly, pre-release and release items against each channel) is in the manual checklist in `docs/updates-spec.md`.
+

@@ -173,10 +173,10 @@ struct PermissionTests {
         await permissions.start()
 
         final class Engine: UpdateEngine {
-            func probe(onResult: @escaping @MainActor (ProbeResult) -> Void) {
-                onResult(.updateAvailable(version: "4.0"))
+            func probe(channel: UpdateChannel, onResult: @escaping @MainActor (ProbeResult) -> Void) {
+                onResult(.updateAvailable(version: "4.0", link: URL(string: "https://example.com/releases/tag/v4.0")))
             }
-            func presentUpdate() {}
+            func presentUpdate(channel: UpdateChannel) {}
         }
         let name = "DeFeedbackHostTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: name)!
@@ -194,7 +194,8 @@ struct PermissionTests {
         #expect(warnings.compactMap { $0["id"] as? String } == ["update", "permission.localNetwork"])
         let update = try #require(warnings.first)
         #expect(update["kind"] as? String == "update")
-        #expect((update["link"] as? String)?.hasPrefix("https://") == true)
+        #expect(update["link"] as? String == "https://example.com/releases/tag/v4.0",
+                "the update warning links to that release's own page")
         let permission = try #require(warnings.last)
         #expect(permission["kind"] as? String == "permission")
         #expect(permission["link"] is NSNull)

@@ -19,6 +19,9 @@ final class SparkleUpdateEngine: NSObject, UpdateEngine {
     private var configurationError: String?
     private var pending: [@MainActor (ProbeResult) -> Void] = []
     private var foundVersion: String?
+    private var foundLink: URL?
+    /// Read by `allowedChannels(for:)`; set at the start of every probe or user-facing check.
+    private var channel: UpdateChannel = .default
     private let willRelaunch: @MainActor () -> Void
 
     /// - Parameter willRelaunch: called just before Sparkle quits to install and relaunch, so the
@@ -52,7 +55,8 @@ final class SparkleUpdateEngine: NSObject, UpdateEngine {
         }
     }
 
-    func probe(onResult: @escaping @MainActor (ProbeResult) -> Void) {
+    func probe(channel: UpdateChannel, onResult: @escaping @MainActor (ProbeResult) -> Void) {
+        self.channel = channel
         prepare()
         if let configurationError {
             onResult(.failed(configurationError))
@@ -70,10 +74,12 @@ final class SparkleUpdateEngine: NSObject, UpdateEngine {
             return
         }
         foundVersion = nil
+        foundLink = nil
         updater.checkForUpdateInformation()
     }
 
-    func presentUpdate() {
+    func presentUpdate(channel: UpdateChannel) {
+        self.channel = channel
         prepare()
         guard let controller else {
             // No Sparkle: the best we can do is send the user to the releases page.
@@ -96,8 +102,18 @@ extension SparkleUpdateEngine: SPUUpdaterDelegate {
 
     nonisolated func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
         let version = item.displayVersionString
+        let link = item.infoURL ?? item.releaseNotesURL
         // Sparkle calls its delegate on the main thread; assuming that keeps events in order.
-        MainActor.assumeIsolated { self.foundVersion = version }
+        MainActor.assumeIsolated {
+            self.foundVersion = version
+            self.foundLink = link
+        }
+    }
+
+    /// Channel filter: untagged (release) items always pass; tagged ones only if the user's channel
+    /// includes them.
+    nonisolated func allowedChannels(for updater: SPUUpdater) -> Set<String> {
+        MainActor.assumeIsolated { self.channel.sparkleChannels }
     }
 
     nonisolated func updater(_ updater: SPUUpdater,
@@ -112,7 +128,7 @@ extension SparkleUpdateEngine: SPUUpdaterDelegate {
         let message = error?.localizedDescription
         MainActor.assumeIsolated {
             if let version = self.foundVersion {
-                self.finish(.updateAvailable(version: version))
+                self.finish(.updateAvailable(version: version, link: self.foundLink))
             } else if error == nil || isNoUpdate {
                 self.finish(.upToDate)
             } else {

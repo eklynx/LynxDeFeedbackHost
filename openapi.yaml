@@ -164,7 +164,8 @@ paths:
         normal answer on a fresh install.
 
         Read-only by design: installing an update is only possible from the native app, on the
-        host Mac. `releasesURL` is where the release notes and downloads live.
+        host Mac. `releaseNotesURL` is the found release's own page (the releases page when the
+        feed names none); `releasesURL` is always the general releases list.
       responses:
         "200":
           description: Current update state.
@@ -978,7 +979,7 @@ components:
     Update:
       type: object
       description: Update availability, as last determined by the app.
-      required: [enabled, available, version, releasesURL]
+      required: [enabled, available, version, channel, releasesURL, releaseNotesURL]
       properties:
         enabled:
           type: boolean
@@ -990,11 +991,22 @@ components:
           type: [string, "null"]
           description: The newer version, or null when none is known.
           examples: ["0.2.0"]
+        channel:
+          type: string
+          enum: [release, prerelease, nightly]
+          description: |
+            The update channel the user follows. Release is the default; pre-release adds
+            not-fully-tested builds; nightly adds every build.
         releasesURL:
           type: string
           format: uri
           description: The releases page, for release notes and downloads.
           examples: ["https://github.com/eklynx/LynxDeFeedbackHost/releases"]
+        releaseNotesURL:
+          type: string
+          format: uri
+          description: The found release's own page, or the releases page when none is known.
+          examples: ["https://github.com/eklynx/LynxDeFeedbackHost/releases/tag/v0.2.0"]
 
     Error:
       type: object

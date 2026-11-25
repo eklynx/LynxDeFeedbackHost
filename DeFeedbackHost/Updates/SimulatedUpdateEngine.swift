@@ -33,11 +33,11 @@ final class SimulatedUpdateEngine: UpdateEngine {
         return SimulatedUpdateEngine(version: value)
     }
 
-    func probe(onResult: @escaping @MainActor (ProbeResult) -> Void) {
-        onResult(.updateAvailable(version: version))
+    func probe(channel: UpdateChannel, onResult: @escaping @MainActor (ProbeResult) -> Void) {
+        onResult(.updateAvailable(version: version, link: nil))
     }
 
-    func presentUpdate() {
+    func presentUpdate(channel: UpdateChannel) {
         NSWorkspace.shared.open(UpdateLinks.releasesPage)
     }
 }

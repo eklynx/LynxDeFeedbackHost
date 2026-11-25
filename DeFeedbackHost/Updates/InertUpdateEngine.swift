@@ -10,9 +10,9 @@ import Foundation
 @MainActor
 final class InertUpdateEngine: UpdateEngine {
 
-    func probe(onResult: @escaping @MainActor (ProbeResult) -> Void) {
+    func probe(channel: UpdateChannel, onResult: @escaping @MainActor (ProbeResult) -> Void) {
         onResult(.failed("Update checking is disabled in this process."))
     }
 
-    func presentUpdate() {}
+    func presentUpdate(channel: UpdateChannel) {}
 }
