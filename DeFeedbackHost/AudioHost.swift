@@ -13,6 +13,7 @@ import CoreAudio
 import Foundation
 import Synchronization
 import ServiceManagement
+import os
 
 enum AudioHostError: LocalizedError {
     case pluginNotInstalled
@@ -475,49 +476,72 @@ final class AudioHost {
     }
 
 
-    // MARK: - Launch at login
+    // MARK: - Launch at login and crash restart
+    //
+    // Two independent launchd agents back these settings; see Lifecycle/LaunchSupervision.swift.
 
-    private(set) var launchAgentStatus: SMAppService.Status = .notRegistered
+    @ObservationIgnored private let launchAgents: LaunchAgentControlling = LaunchAgentService()
+    @ObservationIgnored private let supervision: LaunchSupervision = LaunchdSupervision()
 
-    let isInApplicationsFolder = AudioHost.isInApplicationsFolder(Bundle.main.bundleURL)
+    private(set) var loginAgentStatus: SMAppService.Status = .notRegistered
+    private(set) var supervisorAgentStatus: SMAppService.Status = .notRegistered
 
-    nonisolated static func isInApplicationsFolder(_ bundleURL: URL) -> Bool {
-        bundleURL.standardizedFileURL.resolvingSymlinksInPath().path.hasPrefix("/Applications/")
+    var launchAtLogin: Bool {
+        get { Self.isOn(loginAgentStatus) }
+        set { setAgent(.login, enabled: newValue, name: "launch at login") }
     }
 
-    var launchWithSystem: Bool {
-        get { launchAgentStatus == .enabled || launchAgentStatus == .requiresApproval }
-        set {
-            if newValue && !isInApplicationsFolder {
-                errorMessage = "DeFeedbackHost must be in /Applications for auto-launch to be enabled." // TODO: localize string
-                refreshLaunchAgentStatus()
-                return
-            }
-            var failure: Error?
-            do {
-                try DeFeedbackHostApp.SetLaunchDaemonState(active: newValue)
-            } catch {
-                failure = error
-            }
-
-            refreshLaunchAgentStatus()
-
-            if launchWithSystem != newValue {
-                let reason = failure?.localizedDescription ?? "the system kept the previous setting"
-                errorMessage = "Couldn't turn \(newValue ? "on" : "off") launch at login — \(reason)" // TODO: localize string
-            }
-        }
+    var restartAfterCrash: Bool {
+        get { Self.isOn(supervisorAgentStatus) }
+        set { setAgent(.supervisor, enabled: newValue, name: "restart after crash") }
     }
 
     /// Registered, but the user still has to allow it in System Settings › Login Items.
-    var launchWithSystemNeedsApproval: Bool {
-        launchAgentStatus == .requiresApproval
+    var launchPermissionsNeedApproval: Bool {
+        loginAgentStatus == .requiresApproval || supervisorAgentStatus == .requiresApproval
+    }
+
+    /// Restart-after-crash is on, but this process was started outside launchd (for example from
+    /// Finder before the setting was enabled), so a crash would not be restarted yet.
+    var needsRelaunchToBeSupervised: Bool {
+        supervisorAgentStatus == .enabled && !supervision.isRunningUnderSupervisor
+    }
+
+    /// Quits normally and asks launchd to start the supervised copy once we are gone.
+    func relaunchUnderSupervisor() {
+        guard supervision.handOff(afterDelay: 2) else {
+            errorMessage = "Couldn't ask the system to relaunch DeFeedbackHost — check Login Items in System Settings." // TODO: localize string
+            return
+        }
+        NSApp.terminate(nil)
     }
 
     func refreshLaunchAgentStatus() {
-        launchAgentStatus = DeFeedbackHostApp.GetLaunchDaemonState()
+        loginAgentStatus = launchAgents.status(of: .login)
+        supervisorAgentStatus = launchAgents.status(of: .supervisor)
     }
 
+    private static func isOn(_ status: SMAppService.Status) -> Bool {
+        status == .enabled || status == .requiresApproval
+    }
+
+    private func setAgent(_ kind: LaunchAgentKind, enabled: Bool, name: String) {
+        var failure: Error?
+        do {
+            try launchAgents.setEnabled(enabled, for: kind)
+        } catch {
+            failure = error
+            Logger.host_application.error("Error changing \(name) agent: \(error)")
+        }
+
+        refreshLaunchAgentStatus()
+
+        let isNowOn = Self.isOn(kind == .login ? loginAgentStatus : supervisorAgentStatus)
+        if isNowOn != enabled {
+            let reason = failure?.localizedDescription ?? "the system kept the previous setting"
+            errorMessage = "Couldn't turn \(enabled ? "on" : "off") \(name) — \(reason)" // TODO: localize string
+        }
+    }
 
     // MARK: - Startup and new-instance defaults
 
