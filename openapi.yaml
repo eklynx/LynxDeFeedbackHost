@@ -153,6 +153,38 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /api/update:
+    get:
+      tags: [Status]
+      operationId: getUpdate
+      summary: Whether a newer version of the app is available
+      description: |
+        What the app already knows about updates; this endpoint never triggers a check. The user
+        opts in to checking in the app's Settings (off by default), so `enabled: false` is the
+        normal answer on a fresh install.
+
+        Read-only by design: installing an update is only possible from the native app, on the
+        host Mac. `releasesURL` is where the release notes and downloads live.
+      responses:
+        "200":
+          description: Current update state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Update" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+    head:
+      tags: [Status]
+      operationId: headUpdate
+      summary: Headers for the update state
+      responses:
+        "200":
+          description: Headers only.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /api/events:
     get:
       tags: [Status]
@@ -917,6 +949,27 @@ components:
           example: { error: "Too many connections" }
 
   schemas:
+
+    Update:
+      type: object
+      description: Update availability, as last determined by the app.
+      required: [enabled, available, version, releasesURL]
+      properties:
+        enabled:
+          type: boolean
+          description: Whether the user has turned on background update checking.
+        available:
+          type: boolean
+          description: True when a newer version than the running one has been found.
+        version:
+          type: [string, "null"]
+          description: The newer version, or null when none is known.
+          examples: ["0.2.0"]
+        releasesURL:
+          type: string
+          format: uri
+          description: The releases page, for release notes and downloads.
+          examples: ["https://github.com/eklynx/LynxDeFeedbackHost/releases"]
 
     Error:
       type: object

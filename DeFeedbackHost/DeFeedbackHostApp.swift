@@ -33,11 +33,13 @@ struct DeFeedbackHostApp: App {
     var body: some Scene {
         Window("DeFeedback Host", id: "host") {
             ContentView(host: host, web: web)
+                .environment(appDelegate.updates)
         }
         .defaultSize(width: 900, height: 620)
         .commands {
             CommandGroup(replacing: .appInfo) {
                 AboutCommand()
+                CheckForUpdatesCommand(updates: appDelegate.updates)
             }
         }
 
@@ -60,6 +62,7 @@ struct DeFeedbackHostApp: App {
                     StreamDeckSettingsView()
                 }
             }
+            .environment(appDelegate.updates)
         }
     }
 }

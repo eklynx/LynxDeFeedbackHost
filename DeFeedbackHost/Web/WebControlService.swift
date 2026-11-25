@@ -161,6 +161,10 @@ final class WebControlService {
 
     @ObservationIgnored private let host: AudioHost
 
+    /// Read-only view of update state for `GET /api/update`. Set by the app delegate; nil in tests
+    /// that don't care, in which case the endpoint reports updates as disabled.
+    @ObservationIgnored weak var updateSource: UpdateStatusSource?
+
     @ObservationIgnored private var server: HTTPServer?
     @ObservationIgnored private let events = EventStream()
     @ObservationIgnored private let authGuard = BasicAuth.Guard()
@@ -338,6 +342,10 @@ final class WebControlService {
         case ("GET", "/api/status"), ("HEAD", "/api/status"):
             return .respond(.json(statusPayload()))
 
+        // Update availability (read-only; installing is only possible from the native app)
+        case ("GET", "/api/update"), ("HEAD", "/api/update"):
+            return .respond(.json(updatePayload()))
+
         // Instance list
         case ("GET", "/api/instances"), ("HEAD", "/api/instances"):
             return .respond(.json(Self.getInstanceList(host.instances)))
@@ -371,7 +379,7 @@ final class WebControlService {
         case (_, "/"), (_, "/index.html"):
             return .respond(.error(405, WebErrorStrings.UseGET.rawValue,
                                    headers: [("Allow", "GET, HEAD")]))
-        case (_, "/api/status"):
+        case (_, "/api/status"), (_, "/api/update"):
             return .respond(.error(405, WebErrorStrings.UseGET.rawValue,
                                    headers: [("Allow", "GET, HEAD")]))
         case (_, "/api/events"):
@@ -813,6 +821,17 @@ final class WebControlService {
     // MARK: - Status
 
     /// gets the status of the host.  All values are retrieved from the host even if they could be calculated locally.
+    /// `GET /api/update`. Never triggers a check; reports what the app already knows.
+    func updatePayload() -> [String: Any] {
+        let status = updateSource?.updateStatus ?? UpdateStatus()
+        return [
+            "enabled": status.isEnabled,
+            "available": status.isUpdateAvailable,
+            "version": status.availableVersion ?? NSNull(),
+            "releasesURL": status.releasesPage.absoluteString,
+        ]
+    }
+
     private func statusPayload() -> [String: Any] {
         let diagnostics = host.diagnostics
 

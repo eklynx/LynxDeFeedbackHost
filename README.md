@@ -59,6 +59,9 @@ Plugin Error states:
     - Example images  
       - ![Strength Invalid Instance](./docs/images/strength-invalid-instance.png) ![Unmuted Invalid Instance](./docs/images/unmuted-invalid-instance.png) ![Bypass Invalid Instance](./docs/images/bypass-invalid-instance.png)
 
+### Updates:
+Update checking is **off by default**. Turn it on in Settings › General › Updates and pick how often to check (hourly to weekly). The app checks at startup and on that schedule, and tells you in the main window, in Settings and on the web page when a newer version exists, with a link to the [releases page](https://github.com/eklynx/LynxDeFeedbackHost/releases). It never downloads or installs anything until you choose **Update Now** (also under the application menu: **Check for Updates…**). Updates use [Sparkle](https://sparkle-project.org). The web interface only reports availability; installing is done from the app. See [docs/updates-spec.md](docs/updates-spec.md).
+
 ## Donations Accepted:
 As I am currently an unemployed software engineer I have not been able to afford buying a license to the DeFeedback Plugin.  All testing has been performed using the trial version.    If you find this project useful or at least promising, I do encourage you to donate!  Donations will be used to first purchase three copies of the DeFeedback plugin, one for my main development box, the others for my live sound rig for active usage/testing of this app, as well as a backup for my laptop, because any live sound engineer needs a backup for anything critical.  After that has been achieved, further donations will go to upgrading my live sound gear that this plugin directly interfaces with such as a new mixer and dante interfaces.
 So if you wish to donate, click on the '[Sponsor](https://github.com/sponsors/eklynx)' button above!

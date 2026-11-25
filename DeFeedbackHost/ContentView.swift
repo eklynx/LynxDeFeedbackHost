@@ -33,6 +33,8 @@ struct ContentView: View {
                 errorBanner(message)
             }
 
+            UpdateBanner()
+
             Divider()
             gallery
         }
