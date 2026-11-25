@@ -68,6 +68,42 @@ jobs:
             ${{ runner.temp }}/TestResults.xcresult
             ${{ runner.temp }}/xcodebuild.log
 
+  # Can the hosted runner build a disk image the way the release does? Diagnostic for now: it tries
+  # each way of making a DMG and reports the result, so a failing image tool is seen on a pull
+  # request instead of in the middle of a release.
+  dmg-smoke:
+    name: DMG packaging smoke test
+    runs-on: ${{ fromJSON(inputs.runner || vars.RUNNER_LABEL || '"xcode-27"') }}
+    timeout-minutes: 10
+    steps:
+      - name: Try the disk image tools
+        run: |
+          sw_vers
+          df -h "$RUNNER_TEMP" | tail -1
+          T="$RUNNER_TEMP/dmgdiag"
+          rm -rf "$T"; mkdir -p "$T/stage/App.app/Contents"
+          echo hi > "$T/stage/App.app/Contents/x"
+          ln -s /Applications "$T/stage/Applications"
+          try() {
+            name="$1"; shift
+            echo "::group::$name"
+            "$@"; rc=$?
+            echo "exit=$rc"
+            echo "::endgroup::"
+            echo "RESULT $name -> exit $rc"
+          }
+          try "A hdiutil create (as the release script does)" \
+            hdiutil create -volname "Lynx DeFeedback Host" -srcfolder "$T/stage" -format UDZO -ov "$T/a.dmg"
+          try "B hdiutil create -fs APFS" \
+            hdiutil create -volname "Lynx DeFeedback Host" -fs APFS -srcfolder "$T/stage" -format UDZO -ov "$T/b.dmg"
+          try "C hdiutil create -fs HFS+" \
+            hdiutil create -volname "Lynx DeFeedback Host" -fs HFS+ -srcfolder "$T/stage" -format UDZO -ov "$T/c.dmg"
+          try "D diskutil image create from" \
+            diskutil image create from "$T/stage" "$T/d.dmg" --format UDZO --volumeName "Lynx DeFeedback Host"
+          try "E hdiutil create, name without spaces" \
+            hdiutil create -volname Plain -srcfolder "$T/stage" -format UDZO -ov "$T/e.dmg"
+          ls -la "$T"/*.dmg 2>&1 || true
+
   # The one check to require in branch protection: it fails if any job above failed, was
   # cancelled or was skipped, so adding jobs later only means adding them to `needs`.
   ci-ok:
