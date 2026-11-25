@@ -42,6 +42,18 @@
 //    8. Running under XCTest            -> no engine is created; the service is never started.
 //    9. Nothing is ever downloaded or installed without a user action (rule 5 of issue #7).
 //
+//  Channels (issue #3)
+//   10. `UpdateChannel` picks which feed items are offered: release (default), pre-release (adds
+//                                          items tagged `prerelease`), nightly (adds `nightly` too).
+//                                          Channels are cumulative; "release" is the absence of a tag.
+//   11. Stored channel is missing or unknown -> release. A typo can't opt anyone into nightlies.
+//   12. Changing the channel               -> the known update is cleared (it may not exist on the new
+//                                          channel) and, when checking is on, a probe runs at once.
+//                                          Off: nothing is probed. The channel never downgrades an
+//                                          installed build; it only decides what counts as newer.
+//   13. A found update carries the link to its own release page (`UpdateStatus.releaseNotesURL`),
+//                                          falling back to `UpdateStatus.releasesPage`.
+//
 //  The web interface is READ-ONLY for updates: it can see `UpdateStatus`, never trigger an install.
 //
 import Foundation
@@ -49,6 +61,47 @@ import Foundation
 /// Where users go to read about and download releases.
 enum UpdateLinks {
     static let releasesPage = URL(string: "https://github.com/eklynx/LynxDeFeedbackHost/releases")!
+}
+
+/// Which release stream the user follows. Cumulative: each channel also offers the ones above it.
+enum UpdateChannel: String, CaseIterable, Identifiable, Sendable {
+    case release
+    case prerelease
+    case nightly
+
+    static let `default`: UpdateChannel = .release
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .release: "Release"
+        case .prerelease: "Pre-release"
+        case .nightly: "Nightly"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .release: "Fully tested releases only."
+        case .prerelease: "Releases, plus builds with new features and fixes that aren't fully tested."
+        case .nightly: "Every build, including the nightly one. Expect rough edges."
+        }
+    }
+
+    /// The Sparkle channel names this choice may see. Appcast items with no channel always count.
+    var sparkleChannels: Set<String> {
+        switch self {
+        case .release: []
+        case .prerelease: ["prerelease"]
+        case .nightly: ["prerelease", "nightly"]
+        }
+    }
+
+    /// Reads a stored raw value; anything unrecognised is the safe default.
+    init(stored: String?) {
+        self = stored.flatMap(UpdateChannel.init(rawValue:)) ?? .default
+    }
 }
 
 /// How often the background probe runs. Presets rather than free text so every value is valid.
@@ -83,6 +136,9 @@ struct UpdateStatus: Equatable, Sendable {
     var isEnabled = false
     /// Marketing version of the newest release found, or nil when up to date / never checked.
     var availableVersion: String?
+    /// The found release's own page (release notes and download), when the feed names one.
+    var availableLink: URL?
+    var channel: UpdateChannel = .default
     var lastChecked: Date?
     /// Human-readable reason the last probe failed; nil after a successful probe.
     var lastError: String?
@@ -90,11 +146,13 @@ struct UpdateStatus: Equatable, Sendable {
 
     var isUpdateAvailable: Bool { availableVersion != nil }
     var releasesPage: URL { UpdateLinks.releasesPage }
+    /// Where "release notes" should go: the found release's page, else the releases list.
+    var releaseNotesURL: URL { availableLink ?? releasesPage }
 }
 
 /// Outcome of one silent feed probe.
 enum ProbeResult: Equatable, Sendable {
-    case updateAvailable(version: String)
+    case updateAvailable(version: String, link: URL?)
     case upToDate
     case failed(String)
 }
@@ -104,11 +162,12 @@ enum ProbeResult: Equatable, Sendable {
 protocol UpdateEngine: AnyObject {
 
     /// Reads the feed WITHOUT showing UI or downloading anything, then calls `onResult` once.
-    /// Calling while a probe is in flight is harmless (the engine may coalesce).
-    func probe(onResult: @escaping @MainActor (ProbeResult) -> Void)
+    /// Only items on `channel` (and the untagged ones) count. Calling while a probe is in flight
+    /// is harmless (the engine may coalesce).
+    func probe(channel: UpdateChannel, onResult: @escaping @MainActor (ProbeResult) -> Void)
 
     /// Starts Sparkle's standard user-initiated flow (may download/install after the user agrees).
-    func presentUpdate()
+    func presentUpdate(channel: UpdateChannel)
 }
 
 /// What the web layer needs. Kept tiny so `Web/` does not depend on the rest of `Updates/`.

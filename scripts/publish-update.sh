@@ -10,11 +10,16 @@
 # Options:
 #   --dmg <path>       The notarized, stapled DMG (required).
 #   --app <path>       App bundle to read CFBundleShortVersionString / CFBundleVersion from.
-#   --version <v>      Marketing version (sparkle:shortVersionString). Required without --app.
-#   --build <n>        Build number (sparkle:version = CFBundleVersion = git commit count).
+#   --version <v>      Version shown to users (sparkle:shortVersionString). Required without --app.
+#                      Releases: X.Y.Z. Nightlies: the full version X.Y.Z-<stamp>.<hash>.
+#   --build <n>        Build number (sparkle:version = CFBundleVersion = UTC yyyyMMddHHmmss).
+#   --channel <c>      release (default), prerelease or nightly. Non-release items get a
+#                      <sparkle:channel> tag so only users who opted in are offered them.
+#   --tag <t>          GitHub release tag. Default v<version>, or nightly-<version> for nightly.
 #   --site-dir <dir>   Directory served by GitHub Pages (default: build/site). An existing
 #                      appcast.xml in it is updated; the new release goes first.
-#   --upload           `gh release create/upload` the DMG to tag v<version> (needs `gh` auth).
+#   --upload           `gh release create/upload` the DMG to the tag (needs `gh` auth). Pre-release
+#                      and nightly releases are marked as GitHub pre-releases, never "latest".
 #   --min-os <v>       sparkle:minimumSystemVersion (default 27.0, the deployment target).
 #
 # Signing key (private half of the key whose public half is the SPARKLE_PUBLIC_ED_KEY build
@@ -34,7 +39,7 @@
 set -eu
 
 GITHUB_REPO="${GITHUB_REPO:-eklynx/LynxDeFeedbackHost}"
-DMG=""; APP=""; VERSION=""; BUILD=""; UPLOAD=NO; MIN_OS="27.0"
+DMG=""; APP=""; VERSION=""; BUILD=""; UPLOAD=NO; MIN_OS="27.0"; CHANNEL="release"; TAG=""
 SITE_DIR="build/site"
 
 die() { echo "error: $*" >&2; exit 1; }
@@ -47,12 +52,18 @@ while [ $# -gt 0 ]; do
         --build) BUILD="${2:?}"; shift 2 ;;
         --site-dir) SITE_DIR="${2:?}"; shift 2 ;;
         --min-os) MIN_OS="${2:?}"; shift 2 ;;
+        --channel) CHANNEL="${2:?}"; shift 2 ;;
+        --tag) TAG="${2:?}"; shift 2 ;;
         --upload) UPLOAD=YES; shift ;;
-        -h|--help) sed -n '2,33p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,37p' "$0"; exit 0 ;;
         *) die "unknown option: $1" ;;
     esac
 done
 
+case "${CHANNEL}" in
+    release|prerelease|nightly) ;;
+    *) die "--channel must be release, prerelease or nightly (got '${CHANNEL}')" ;;
+esac
 [ -f "${DMG}" ] || die "--dmg is required and must exist"
 if [ -n "${APP}" ]; then
     PLIST="${APP}/Contents/Info.plist"
@@ -78,23 +89,30 @@ fi
 
 LENGTH="$(stat -f%z "${DMG}")"
 DMG_NAME="$(basename "${DMG}")"
-TAG="v${VERSION}"
+if [ -z "${TAG}" ]; then
+    if [ "${CHANNEL}" = "nightly" ]; then TAG="nightly-${VERSION}"; else TAG="v${VERSION}"; fi
+fi
 URL="https://github.com/${GITHUB_REPO}/releases/download/${TAG}/${DMG_NAME}"
 NOTES="https://github.com/${GITHUB_REPO}/releases/tag/${TAG}"
 
 mkdir -p "${SITE_DIR}"
 FEED="${SITE_DIR}/appcast.xml"
 
-VERSION="${VERSION}" BUILD="${BUILD}" URL="${URL}" NOTES="${NOTES}" SIGNATURE="${SIGNATURE}" \
+VERSION="${VERSION}" BUILD="${BUILD}" CHANNEL="${CHANNEL}" URL="${URL}" NOTES="${NOTES}" SIGNATURE="${SIGNATURE}" \
 LENGTH="${LENGTH}" MIN_OS="${MIN_OS}" FEED="${FEED}" python3 -I - <<'PY'
 import os, email.utils
 from xml.sax.saxutils import escape, quoteattr
 
 e = os.environ
+channel = ""
+if e['CHANNEL'] != 'release':
+    channel = f"      <sparkle:channel>{escape(e['CHANNEL'])}</sparkle:channel>\n"
+
 item = f"""    <item>
       <title>Version {escape(e['VERSION'])}</title>
       <pubDate>{email.utils.formatdate(usegmt=True)}</pubDate>
-      <sparkle:version>{escape(e['BUILD'])}</sparkle:version>
+      <link>{escape(e['NOTES'])}</link>
+{channel}      <sparkle:version>{escape(e['BUILD'])}</sparkle:version>
       <sparkle:shortVersionString>{escape(e['VERSION'])}</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>{escape(e['MIN_OS'])}</sparkle:minimumSystemVersion>
       <sparkle:releaseNotesLink>{escape(e['NOTES'])}</sparkle:releaseNotesLink>
@@ -121,13 +139,18 @@ if os.path.exists(e["FEED"]):
 open(e["FEED"], "w", encoding="utf-8").write(head + item + "".join(existing) + tail)
 PY
 
-echo "Wrote ${FEED} (version ${VERSION}, build ${BUILD})"
+echo "Wrote ${FEED} (version ${VERSION}, build ${BUILD}, channel ${CHANNEL})"
 
 if [ "${UPLOAD}" = "YES" ]; then
     if gh release view "${TAG}" --repo "${GITHUB_REPO}" >/dev/null 2>&1; then
         gh release upload "${TAG}" "${DMG}" --repo "${GITHUB_REPO}" --clobber
     else
-        gh release create "${TAG}" "${DMG}" --repo "${GITHUB_REPO}" --title "${TAG}" --generate-notes
+        if [ "${CHANNEL}" = "release" ]; then
+            gh release create "${TAG}" "${DMG}" --repo "${GITHUB_REPO}" --title "${TAG}" --generate-notes
+        else
+            gh release create "${TAG}" "${DMG}" --repo "${GITHUB_REPO}" --title "${TAG}" \
+                --prerelease --latest=false --generate-notes
+        fi
     fi
 fi
 

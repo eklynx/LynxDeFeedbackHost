@@ -40,12 +40,17 @@ struct UpdateSettingsSection: View {
                 }
                 .disabled(!updates.isEnabled)
 
+                Picker("Channel", selection: $updates.channel) {
+                    ForEach(UpdateChannel.allCases) { Text($0.label).tag($0) }
+                }
+                .disabled(!updates.isEnabled)
+
                 if let version = updates.status.availableVersion {
                     HStack {
                         Label("Version \(version) is available.", systemImage: "arrow.down.circle.fill")
                             .foregroundStyle(.tint)
                         Spacer()
-                        Link("Release notes", destination: updates.status.releasesPage)
+                        Link("Release notes", destination: updates.status.releaseNotesURL)
                         Button("Update Now") { updates.installNow() }
                     }
                     .font(.callout)
@@ -65,6 +70,8 @@ struct UpdateSettingsSection: View {
                     Off by default. When on, the app looks for a new version at startup and on the \
                     chosen schedule, and tells you here and in the web interface. It never downloads \
                     or installs anything until you choose Update Now.
+
+                    \(updates.channel.summary)
                     """)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -93,7 +100,7 @@ struct UpdateBanner: View {
                 Label("Version \(version) of \(AppInfo.name) is available.",
                       systemImage: "arrow.down.circle.fill")
                 Spacer()
-                Link("Releases", destination: updates.status.releasesPage)
+                Link("Release notes", destination: updates.status.releaseNotesURL)
                 Button("Update Now") { updates.installNow() }
             }
             .font(.callout)

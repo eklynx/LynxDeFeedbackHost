@@ -34,6 +34,21 @@ final class UpdateService: UpdateStatusSource, WarningSource {
         }
     }
 
+    /// Switching clears the known update (it may not exist on the new channel) and re-probes when on.
+    var channel: UpdateChannel {
+        get { preferences.channel }
+        set {
+            guard newValue != preferences.channel else { return }
+            preferences.channel = newValue
+            status.channel = newValue
+            status.availableVersion = nil
+            status.availableLink = nil
+            status.lastError = nil
+            persist()
+            reschedule(probeNow: true)
+        }
+    }
+
     var updateStatus: UpdateStatus { status }
 
     /// The web page's "update available" banner (see Warnings/AppWarning.swift).
@@ -63,7 +78,9 @@ final class UpdateService: UpdateStatusSource, WarningSource {
         self.now = now
         self.sleep = sleep
         self.preferences = UpdatePreferences(from: defaults)
-        self.status = UpdateStatus(isEnabled: preferences.isEnabled, lastChecked: preferences.lastChecked)
+        self.status = UpdateStatus(isEnabled: preferences.isEnabled,
+                                   channel: preferences.channel,
+                                   lastChecked: preferences.lastChecked)
     }
 
     /// Call once at application startup. Probes immediately when enabled (contract rule 2).
@@ -75,13 +92,13 @@ final class UpdateService: UpdateStatusSource, WarningSource {
 
     /// Menu item: a user-initiated check, allowed even when background checking is off.
     func checkForUpdates() {
-        engine.presentUpdate()
+        engine.presentUpdate(channel: preferences.channel)
     }
 
     /// "Update Now": same hand-off, only offered while an update is known.
     func installNow() {
         guard status.isUpdateAvailable else { return }
-        engine.presentUpdate()
+        engine.presentUpdate(channel: preferences.channel)
     }
 
     // MARK: - Scheduling
@@ -106,8 +123,9 @@ final class UpdateService: UpdateStatusSource, WarningSource {
 
     private func runProbe() async -> ProbeResult {
         status.isChecking = true
+        let channel = preferences.channel
         let result = await withCheckedContinuation { continuation in
-            engine.probe { continuation.resume(returning: $0) }
+            engine.probe(channel: channel) { continuation.resume(returning: $0) }
         }
         apply(result)
         return result
@@ -119,11 +137,13 @@ final class UpdateService: UpdateStatusSource, WarningSource {
         preferences.lastChecked = status.lastChecked
         persist()
         switch result {
-        case .updateAvailable(let version):
+        case .updateAvailable(let version, let link):
             status.availableVersion = version
+            status.availableLink = link
             status.lastError = nil
         case .upToDate:
             status.availableVersion = nil
+            status.availableLink = nil
             status.lastError = nil
         case .failed(let message):
             // Keep any known update: a flaky network must not hide it (contract rule 6).

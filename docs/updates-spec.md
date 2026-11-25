@@ -2,7 +2,7 @@
 
 Source of truth in code: `DeFeedbackHost/Updates/UpdateChecking.swift` (contract), implemented by
 `UpdateService`, `UpdateScheduler`, `UpdatePreferences` and `SparkleUpdateEngine`.
-Tests: `DeFeedbackHostTests/UpdateTests.swift` (rules U1–U17). Origin: GitHub issue #7.
+Tests: `DeFeedbackHostTests/UpdateTests.swift` (rules U1–U24). Origin: GitHub issue #7.
 
 ## Model
 
@@ -26,12 +26,19 @@ GitHub Release assets.
 | U9  | `checkForUpdates()` (menu) works with the setting off; `installNow()` does nothing when no update is known. | `manualCheckWorksWhenDisabled`, `installNowNeedsKnownUpdate` |
 | U10 | Probes never start Sparkle's install flow; only `checkForUpdates()`/`installNow()` do. | `probesNeverInstall` |
 | U11 | Scheduler delays are never below the 60 s floor, and a successful probe waits the full interval; a failed one retries after 15 min, capped at the interval. | `schedulerFloorAndSuccessDelay`, `failureRetriesSooner` |
-| U12 | `GET /api/update` reports `{enabled, available, version, releasesURL}`; it never triggers a check. | `webPayload…` |
+| U12 | `GET /api/update` reports `{enabled, available, version, channel, releasesURL, releaseNotesURL}`; it never triggers a check. | `webPayload…` |
 | U13 | `/api/update` is documented in `openapi.yaml` (route conformance). | `OpenAPIConformanceTests.everyRouteIsDocumented` |
 | U14 | The built Info.plist sets `SUEnableAutomaticChecks` and `SUAutomaticallyUpdate` to false and an https `SUFeedURL`. | `sparkleNeverActsOnItsOwn` |
 | U15 | The Sparkle-facing engine is inert under XCTest, so tests never start Sparkle or touch the network. | `inertEngineNeverCallsSparkle` |
 | U16 | Debug builds only: `defaults write … Updates.simulateVersion -string 9.9.9` makes every probe report that version (no network/Sparkle); the code is compiled out of release builds. | `simulatedEngineReportsVersion`, `simulationIsDebugOnly` |
 | U17 | The update banner adds to the main window's required height instead of shrinking the gallery (mute/bypass row stays visible). | `MainWindowSizingTests.bannerAddsToRequiredHeight` |
+| U18 | The channel is `release` by default; a missing or unrecognised stored value means `release`. | `channelDefaultsToRelease` |
+| U19 | Channels are cumulative: release sees untagged feed items only, pre-release adds `prerelease`, nightly adds `prerelease` and `nightly`. | `channelsAreCumulative` |
+| U20 | Probes and manual checks use the chosen channel; switching it clears the known update and, with checking on, probes at once. | `engineIsToldTheChannel`, `switchingChannelReprobes` |
+| U21 | Switching channel with checking off makes no probe (the choice is still saved). | `switchingChannelWhenOffDoesNotProbe` |
+| U22 | "Release notes" links to the found release's own page, falling back to the releases page; `/api/update` reports both. | `releaseNotesLinkFallsBack`, `webPayloadReflectsStatus` |
+| U23 | `CFBundleVersion` is `$BUILD_NUMBER` or the UTC build time (`yyyyMMddHHmmss`), so it rises across channels and workflows; non-digits are rejected. | `buildNumberIsTimestamp`, `buildNumberOverride` |
+| U24 | `publish-update.sh --channel` tags non-release items with `<sparkle:channel>`, adds `<link>` to the item's release page, rejects unknown channels, and replaces a republished build. | `publishTagsChannels`, `publishDedupAndValidation` |
 
 Debug-only simulation and every other `defaults` key: `docs/debug-settings.md`.
 
@@ -45,11 +52,16 @@ Debug-only simulation and every other `defaults` key: `docs/debug-settings.md`.
 5. **Relaunch under supervision**: with "Restart after crash" on, update; the new copy launches
    once (no duplicate, no handoff loop) and `launchctl print gui/$UID/com.eklynx.sound.DeFeedbackHost.supervisor`
    shows it running.
-6. Offline: setting on, network off — status shows "Couldn't check", no alert, app unaffected.
+6. **Channels**: publish a release, a pre-release and a nightly (newer build numbers each). With
+   Release selected only the release is offered; Pre-release offers the pre-release; Nightly
+   offers the nightly. In each case "Release notes" opens that item's own GitHub page. Switching
+   back to Release does not downgrade an installed nightly (Sparkle only moves forward).
+7. Offline: setting on, network off — status shows "Couldn't check", no alert, app unaffected.
 
 ## Notes
 
 - Without `SPARKLE_PUBLIC_ED_KEY` set, the engine reports "not configured" instead of starting
   Sparkle; release builds must set it (see `scripts/publish-update.sh --help`).
-- `sparkle:version` in the appcast is `CFBundleVersion` (git commit count);
-  `sparkle:shortVersionString` is the marketing version.
+- `sparkle:version` in the appcast is `CFBundleVersion` (UTC build time, `yyyyMMddHHmmss`);
+  `sparkle:shortVersionString` is the full version shown to users (`X.Y.Z`, or
+  `X.Y.Z-<stamp>.<hash>` for nightlies). The app's own `CFBundleShortVersionString` stays `X.Y.Z`.

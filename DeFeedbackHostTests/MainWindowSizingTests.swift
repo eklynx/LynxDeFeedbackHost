@@ -15,10 +15,10 @@ import Testing
 
 @MainActor
 private final class AvailableEngine: UpdateEngine {
-    func probe(onResult: @escaping @MainActor (ProbeResult) -> Void) {
-        onResult(.updateAvailable(version: "9.9.9"))
+    func probe(channel: UpdateChannel, onResult: @escaping @MainActor (ProbeResult) -> Void) {
+        onResult(.updateAvailable(version: "9.9.9", link: nil))
     }
-    func presentUpdate() {}
+    func presentUpdate(channel: UpdateChannel) {}
 }
 
 @MainActor

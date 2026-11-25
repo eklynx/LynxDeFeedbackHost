@@ -832,7 +832,9 @@ final class WebControlService {
             "enabled": status.isEnabled,
             "available": status.isUpdateAvailable,
             "version": status.availableVersion ?? NSNull(),
+            "channel": status.channel.rawValue,
             "releasesURL": status.releasesPage.absoluteString,
+            "releaseNotesURL": status.releaseNotesURL.absoluteString,
         ]
     }
 
