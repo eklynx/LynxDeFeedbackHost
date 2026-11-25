@@ -68,48 +68,60 @@ jobs:
             ${{ runner.temp }}/TestResults.xcresult
             ${{ runner.temp }}/xcodebuild.log
 
-  # Can the hosted runner build a disk image the way the release does? Diagnostic for now: it tries
-  # each way of making a DMG and reports the result, so a failing image tool is seen on a pull
-  # request instead of in the middle of a release.
+  # Does the release's packaging work on the hosted runner? Archives the app the way a release does
+  # and packs the DMG, but UNSIGNED and un-notarized (no certificate on pull requests). A failure
+  # here would otherwise only show up in the middle of a real release.
   dmg-smoke:
-    name: DMG packaging smoke test
+    name: Archive and package a DMG
     runs-on: ${{ fromJSON(inputs.runner || vars.RUNNER_LABEL || '"xcode-27"') }}
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
-      - name: Try the disk image tools
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Build the Stream Deck plugin tools
         run: |
-          sw_vers
-          df -h "$RUNNER_TEMP" | tail -1
-          T="$RUNNER_TEMP/dmgdiag"
-          rm -rf "$T"; mkdir -p "$T/stage/App.app/Contents"
-          echo hi > "$T/stage/App.app/Contents/x"
-          ln -s /Applications "$T/stage/Applications"
-          try() {
-            name="$1"; shift
-            echo "::group::$name"
-            "$@"; rc=$?
-            echo "exit=$rc"
-            echo "::endgroup::"
-            echo "RESULT $name -> exit $rc"
-          }
-          try "A hdiutil create (as the release script does)" \
-            hdiutil create -volname "Lynx DeFeedback Host" -srcfolder "$T/stage" -format UDZO -ov "$T/a.dmg"
-          try "B hdiutil create -fs APFS" \
-            hdiutil create -volname "Lynx DeFeedback Host" -fs APFS -srcfolder "$T/stage" -format UDZO -ov "$T/b.dmg"
-          try "C hdiutil create -fs HFS+" \
-            hdiutil create -volname "Lynx DeFeedback Host" -fs HFS+ -srcfolder "$T/stage" -format UDZO -ov "$T/c.dmg"
-          try "D diskutil image create from" \
-            diskutil image create from "$T/stage" "$T/d.dmg" --format UDZO --volumeName "Lynx DeFeedback Host"
-          try "E hdiutil create, name without spaces" \
-            hdiutil create -volname Plain -srcfolder "$T/stage" -format UDZO -ov "$T/e.dmg"
-          ls -la "$T"/*.dmg 2>&1 || true
+          npm install -g @elgato/cli
+          cd streamdeck
+          npm ci
+          npm run build
+      - name: Archive and package (unsigned)
+        env:
+          ALLOW_UNSIGNED_DMG: "YES"
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project DeFeedbackHost.xcodeproj \
+            -scheme DeFeedbackHost \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -archivePath "$RUNNER_TEMP/DeFeedbackHost.xcarchive" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY="" \
+            | tee "$RUNNER_TEMP/archive.log"
+      - name: Check the image
+        run: |
+          DMG="$(ls build/*.dmg | head -n 1)"
+          test -f "$DMG" || { echo "::error::no DMG was produced"; exit 1; }
+          hdiutil verify "$DMG"
+          MOUNT="$(mktemp -d)"
+          hdiutil attach "$DMG" -nobrowse -readonly -mountpoint "$MOUNT" -quiet
+          trap 'hdiutil detach "$MOUNT" -quiet || true' EXIT
+          test -d "$MOUNT"/*.app || { echo "::error::no app inside the DMG"; exit 1; }
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$MOUNT"/*.app/Contents/Info.plist
+      - name: Upload the log
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: archive-log
+          path: ${{ runner.temp }}/archive.log
 
   # The one check to require in branch protection: it fails if any job above failed, was
   # cancelled or was skipped, so adding jobs later only means adding them to `needs`.
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [app-build-test]
+    needs: [app-build-test, dmg-smoke]
     runs-on: ubuntu-latest
     steps:
       - name: All required jobs passed
