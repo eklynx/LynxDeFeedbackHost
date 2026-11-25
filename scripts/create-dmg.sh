@@ -4,14 +4,15 @@
 # Run from an install-only Run Script build phase (Product > Archive). Writes
 # build/<PRODUCT_NAME>-<MARKETING_VERSION>.dmg in the project directory.
 #
-# Notarization uses a notarytool keychain profile. Create it once with:
+# Notarization (see scripts/notarytool-submit.sh): in CI an App Store Connect API key
+# (NOTARY_KEY_PATH, NOTARY_KEY_ID, NOTARY_ISSUER_ID); locally a notarytool keychain profile,
+# created once with:
 #   xcrun notarytool store-credentials DeFeedbackHost-Notary \
 #       --apple-id <apple-id> --team-id <team-id> --password <app-specific-password>
 # Override the profile name with NOTARY_KEYCHAIN_PROFILE. Set SKIP_NOTARIZATION=YES
 # to build a signed but un-notarized image.
 set -eu
 
-NOTARY_KEYCHAIN_PROFILE="${NOTARY_KEYCHAIN_PROFILE:-DeFeedbackHost-Notary}"
 SKIP_NOTARIZATION="${SKIP_NOTARIZATION:-NO}"
 
 APP_PATH="${TARGET_BUILD_DIR}/${FULL_PRODUCT_NAME}"
@@ -70,7 +71,7 @@ if [ "${SKIP_NOTARIZATION}" = "YES" ]; then
     exit 0
 fi
 
-xcrun notarytool submit "${DMG_PATH}" --keychain-profile "${NOTARY_KEYCHAIN_PROFILE}" --wait
+"${PROJECT_DIR}/scripts/notarytool-submit.sh" "${DMG_PATH}"
 xcrun stapler staple "${DMG_PATH}"
 spctl --assess --type open --context context:primary-signature --verbose=2 "${DMG_PATH}"
 

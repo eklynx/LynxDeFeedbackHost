@@ -117,3 +117,19 @@ Implemented and unit-tested (rules P1–P9). The manual checklist with real syst
 ## Status
 Implemented and unit-tested (rules U18–U24). The real-feed check (nightly, pre-release and release items against each channel) is in the manual checklist in `docs/updates-spec.md`.
 
+# CI/CD part 3: release workflow (issue #3)
+
+## Decisions not in the spec
+- **Notarization uses an App Store Connect API key** (your choice) through the new `scripts/notarytool-submit.sh`; the old keychain profile still works locally when no API key variables are set, and half a key is an error rather than a silent fallback. The script also requires Apple's status to be `Accepted`, because `notarytool submit --wait` on its own isn't a trustworthy pass/fail.
+- **One DMG script.** The Xcode "Notorize DMG" phase held an inline copy of `scripts/create-dmg.sh`; it now just runs the script, so Xcode, a terminal and CI can't drift apart.
+- **The archive does the signing.** CI archives unsigned (`CODE_SIGNING_ALLOWED=NO`) and the install-only run-script phases sign the DMG copy with Developer ID, as they already did locally. No Apple Development certificate or provisioning is needed on the runner.
+- **Secrets only in the `release` environment** (limited to `main`), only ever as `env:` values; a test fails if a secret shows up anywhere else in the workflow. A temporary keychain with a random password holds the certificate and is deleted even on failure.
+- **Dry run** stops before any publishing and keeps the DMG as a run artifact, so the very first run can be done with nothing at stake.
+- **Release first, appcast second.** The GitHub Release (and its DMG URL) must exist before the feed points to it, so a failed appcast push leaves a public DMG without an update offer, not an update offer with a dead link. Recovery is in `docs/release.md`.
+
+## Things to know / tradeoffs
+- A test caught a real bug in my first import script: `security import` guesses the file format from the extension and my temp file had none ("Unknown format"). It now passes `-f pkcs12`.
+- Not verified: the workflow itself (needs the six secrets), the archive-time signing on a hosted runner, and notarization with the API key. The dry run is the first real test. I did not run a local archive because it would sign with your real Developer ID and could raise keychain prompts.
+- This branch is based on `main` before #17 (update channels). Until #17 merges, `BUILD_NUMBER` (set-build-number.sh) and `publish-update.sh --channel` / `RELEASE_TARGET` don't exist, so the verify step and the publish step would fail. Rebase onto `main` after #17 and add `RELEASE_TARGET` (rule R7) then.
+- The hosted runner needs Node for the Stream Deck plugin the archive packs; the job installs `@elgato/cli` and builds `streamdeck/` first.
+
