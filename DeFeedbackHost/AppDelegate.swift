@@ -39,6 +39,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #endif
         return UpdateService(engine: engine)
     }()
+    /// Asks for the permissions the app needs at launch and reports any that are denied (issue #14).
+    /// Contract: `Permissions/PermissionChecking.swift`. Inert under XCTest so no test raises a prompt.
+    lazy var permissions: PermissionService = {
+        if Self.isRunningUnderXCTest {
+            return PermissionService(checkers: Permission.allCases.map(InertPermissionChecker.init))
+        }
+        return PermissionService(checkers: [MicrophonePermission(),
+                                            LocalNetworkPermission(),
+                                            LoginItemsPermission()])
+    }()
     private var heartbeatTimer: Timer?
     private var sigtermSource: DispatchSourceSignal?
 
@@ -87,8 +97,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         web.updateSource = updates
+        web.warningSources = [updates, permissions]
         if !Self.isRunningUnderXCTest {
             updates.start()   // probes now only if the user opted in
+
+            // Ask for everything up front, so no prompt waits for a settings tab to be opened.
+            Task { await permissions.start() }
+            // A grant made in System Settings while we run shows up when the user comes back.
+            NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification,
+                                                   object: nil, queue: .main) { [permissions] _ in
+                Task { @MainActor in await permissions.refresh() }
+            }
         }
 
         // Started here rather than from a view so it doesn't depend on a window being shown.

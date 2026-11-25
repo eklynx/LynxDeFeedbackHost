@@ -950,6 +950,31 @@ components:
 
   schemas:
 
+    Warning:
+      type: object
+      description: One thing the user should know about.
+      required: [id, kind, message, link, linkTitle]
+      properties:
+        id:
+          type: string
+          description: |
+            Stable identifier, the same for the same condition every time. In use: `update`,
+            `permission.microphone`, `permission.localNetwork`, `permission.loginItems`.
+          examples: ["permission.localNetwork"]
+        kind:
+          type: string
+          enum: [update, permission]
+        message:
+          type: string
+          description: Text to show the user.
+        link:
+          type: [string, "null"]
+          format: uri
+          description: An https page with more information, or null.
+        linkTitle:
+          type: [string, "null"]
+          description: Label for `link`, or null when there is no link.
+
     Update:
       type: object
       description: Update availability, as last determined by the app.
@@ -1209,6 +1234,7 @@ components:
         Additive fields may appear without a protocol bump, so clients should ignore unknown keys.
       required:
         - protocol
+        - warnings
         - running
         - canStart
         - blockedReason
@@ -1251,6 +1277,15 @@ components:
           description: |
             Wire format version. Bumped only for a breaking change, so a cached page can refuse a
             server it does not understand rather than misreport it.
+
+        warnings:
+          type: array
+          description: |
+            Things the user should know about that are not command errors: an update is available,
+            a system permission is not allowed. Empty when there is nothing to report. An entry
+            disappears as soon as the app stops reporting it, so a page can simply redraw from
+            every status it receives. Clients should ignore unknown `id`s and `kind`s.
+          items: { $ref: "#/components/schemas/Warning" }
 
         running:
           type: boolean

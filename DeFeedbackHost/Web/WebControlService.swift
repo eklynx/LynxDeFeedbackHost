@@ -165,6 +165,10 @@ final class WebControlService {
     /// that don't care, in which case the endpoint reports updates as disabled.
     @ObservationIgnored weak var updateSource: UpdateStatusSource?
 
+    /// Everything that has something to warn about (updates, permissions). Collected into the
+    /// `warnings` array of every status payload. Set by the app delegate.
+    @ObservationIgnored var warningSources: [WarningSource] = []
+
     @ObservationIgnored private var server: HTTPServer?
     @ObservationIgnored private let events = EventStream()
     @ObservationIgnored private let authGuard = BasicAuth.Guard()
@@ -832,11 +836,17 @@ final class WebControlService {
         ]
     }
 
+    /// The `warnings` array of the status payload: every source's current warnings, in source order.
+    func warningPayload() -> [[String: Any]] {
+        warningSources.flatMap(\.warnings).map(\.jsonObject)
+    }
+
     private func statusPayload() -> [String: Any] {
         let diagnostics = host.diagnostics
 
         return [
             "protocol": Self.protocolVersion,
+            "warnings": warningPayload(),
             "running": host.isRunning,
             "canStart": host.canStart,
             "blockedReason": host.startBlockedReason ?? NSNull(),

@@ -307,15 +307,20 @@
   }
   #notice[hidden] { display: none; }
 
-  #update-banner {
+  #warnings { margin-bottom: 1rem; }
+  #warnings[hidden] { display: none; }
+  #warnings .warning {
     border-left: 3px solid var(--accent, currentColor);
     background: color-mix(in srgb, var(--accent, currentColor) 10%, transparent);
     padding: 0.7rem 0.9rem;
     border-radius: 0.35rem;
     font-size: 0.875rem;
-    margin-bottom: 1rem;
+    margin: 0 0 0.5rem;
   }
-  #update-banner[hidden] { display: none; }
+  #warnings .warning.permission {
+    border-left-color: #d97706;
+    background: color-mix(in srgb, #d97706 12%, transparent);
+  }
 </style>
 </head>
 <body>
@@ -327,11 +332,7 @@
 
   <p id="notice" hidden role="alert"></p>
 
-  <p id="update-banner" hidden role="status">
-    <span id="update-text"></span>
-    <a id="update-link" href="#" target="_blank" rel="noopener noreferrer">Release notes</a>
-    <span class="caption"> — install it from the app on the host Mac.</span>
-  </p>
+  <div id="warnings" hidden role="status"></div>
 
   <section class="panel">
     <button id="transport" type="button" disabled>—</button>
@@ -1015,8 +1016,33 @@ function setLink(state, text) {
   link.textContent = text;
 }
 
+/* Generic warnings from the app (an update is available, a permission is missing, …). They arrive
+   in every status payload, so one disappears the moment the app stops reporting it. Built with
+   textContent, never innerHTML: the text comes from the host. */
+function renderWarnings(warnings) {
+  const box = el("warnings");
+  const list = Array.isArray(warnings) ? warnings : [];
+  box.hidden = list.length === 0;
+  box.replaceChildren(...list.map((warning) => {
+    const row = document.createElement("p");
+    row.className = "warning " + (warning.kind || "");
+    row.dataset.id = warning.id || "";
+    row.append(document.createTextNode(warning.message || ""));
+    if (warning.link && /^https:\/\//.test(warning.link)) {
+      const anchor = document.createElement("a");
+      anchor.href = warning.link;
+      anchor.target = "_blank";
+      anchor.rel = "noopener noreferrer";
+      anchor.textContent = " " + (warning.linkTitle || "More info");
+      row.append(anchor);
+    }
+    return row;
+  }));
+}
+
 function render() {
   if (!status) return;
+  renderWarnings(status.warnings);
 
   const running = status.running === true;
 
@@ -1242,27 +1268,7 @@ function connect() {
   });
 }
 
-/* Update availability. Read-only: the page can say a new version exists, never install it.
-   Polled slowly because the app only learns of a release every hour at the very most. */
-async function checkForUpdate() {
-  try {
-    const response = await fetch("/api/update", { cache: "no-store" });
-    if (!response.ok) return;
-    const update = await response.json();
-    const banner = el("update-banner");
-    banner.hidden = !update.available;
-    if (update.available) {
-      el("update-text").textContent = "Version " + update.version + " is available.";
-      el("update-link").href = update.releasesURL;
-    }
-  } catch (error) {
-    /* The banner is a convenience; stay quiet when the host is unreachable. */
-  }
-}
-
 connect();
-checkForUpdate();
-setInterval(checkForUpdate, 5 * 60 * 1000);
 </script>
 </body>
 </html>

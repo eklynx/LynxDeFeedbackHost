@@ -57,6 +57,8 @@ struct GeneralSettingsView: View {
                 .foregroundStyle(.secondary)
             }
 
+            PermissionSettingsSection()
+
             Section {
                 Toggle("Auto-run host on application startup", isOn: $host.autoRunOnStartup)
             } header: {

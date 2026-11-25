@@ -64,3 +64,22 @@ Spec: `docs/updates-spec.md`. Contract: `DeFeedbackHost/Updates/UpdateChecking.s
 
 ## Status
 Implemented and unit-tested (17 new tests, rules U1–U15). **Not yet done:** enable GitHub Pages (source: `gh-pages`), and run the manual checklist in `docs/updates-spec.md` (notarized update, relaunch under launchd supervision).
+
+# Permissions at startup, generic warnings (issue #14)
+
+## Decisions not in the spec
+- **Generic `warnings` in the status payload** (your request): `AppWarning` / `WarningSource` live in a tiny `Warnings/` namespace; `UpdateService` and `PermissionService` both conform, and `WebControlService` just concatenates its `warningSources`. The page's old `/api/update` poll and `#update-banner` are replaced by one banner rendered from `status.warnings` (so it also updates live over SSE). `GET /api/update` still exists, unchanged, for other clients.
+- **Login Items is report-only.** Registering the agents at launch would silently switch "launch at login" and "restart after a crash" on for every install, so it only warns when an agent the user turned on is `requiresApproval`.
+- **Local Network** is probed with a short `NWBrowser` for `_defeedbackhost._tcp` (Bonjour). That raises the prompt at launch and reports "policy denied" (-65570) as denied. The same probe is the re-check, because the system offers no passive status. A probe that times out (prompt unanswered) is `.unknown` and never warns.
+- **Re-check trigger** is `didBecomeActive`, which covers "granted in System Settings, switched back".
+- `NSBonjourServices` went into `Updates/SparkleInfo.plist` (the merged plist: arrays can't be `INFOPLIST_KEY_*`). The file name is now slightly misleading; renaming would churn the project file for no behavior change.
+
+## Things to know / tradeoffs
+- The Microphone prompt now appears at launch rather than at first Run. `AudioHost.ensureMicrophoneAccess` is untouched and still guards starting the engine.
+- The web warning for Local Network is mostly seen from the host machine itself: a client that can reach the page at all already got through the permission.
+- This branch is off `main`; the update-channels work (#3 branch) also touches `UpdateService`, `WebControlService` and `openapi.yaml`, so whichever merges second needs a small rebase (the update warning's link should then use `releaseNotesURL`).
+- Real prompts can't be unit-tested; the manual checklist in `docs/permissions-spec.md` covers them.
+
+## Status
+Implemented and unit-tested (rules P1–P9). The manual checklist with real system prompts has not been run.
+

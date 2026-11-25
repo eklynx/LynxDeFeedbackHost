@@ -4,6 +4,7 @@
 <dict>
 	<!-- Merged into the generated Info.plist (INFOPLIST_FILE + GENERATE_INFOPLIST_FILE).
 	     Xcode ignores custom INFOPLIST_KEY_* names, so Sparkle's keys live here.
+	     (It also carries NSBonjourServices for the permission probe: arrays can't be INFOPLIST_KEYs.)
 	     See DeFeedbackHost/Updates/UpdateChecking.swift and docs/updates-spec.md. -->
 
 	<!-- Appcast hosted on GitHub Pages (published by scripts/publish-update.sh). -->
@@ -23,5 +24,12 @@
 	<false/>
 	<key>SUAllowsAutomaticUpdates</key>
 	<false/>
+
+	<!-- Local Network permission probe (issue #14): the browse for this Bonjour type is what raises
+	     the system prompt at launch. Must match LocalNetworkPermission.serviceType. -->
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_defeedbackhost._tcp</string>
+	</array>
 </dict>
 </plist>

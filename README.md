@@ -59,6 +59,9 @@ Plugin Error states:
     - Example images  
       - ![Strength Invalid Instance](./docs/images/strength-invalid-instance.png) ![Unmuted Invalid Instance](./docs/images/unmuted-invalid-instance.png) ![Bypass Invalid Instance](./docs/images/bypass-invalid-instance.png)
 
+### Permissions:
+At startup the app asks for what it needs (Microphone, Local Network) so the prompts don't appear later while you're using it. Anything that isn't allowed, including Login Items awaiting approval when launch-at-login or restart-after-a-crash is on, shows a warning in the main window, in Settings › General › Permissions, and on the web page, and clears when you allow it. See [docs/permissions-spec.md](docs/permissions-spec.md).
+
 ### Updates:
 Update checking is **off by default**. Turn it on in Settings › General › Updates and pick how often to check (hourly to weekly). The app checks at startup and on that schedule, and tells you in the main window, in Settings and on the web page when a newer version exists, with a link to the [releases page](https://github.com/eklynx/LynxDeFeedbackHost/releases). It never downloads or installs anything until you choose **Update Now** (also under the application menu: **Check for Updates…**). Updates use [Sparkle](https://sparkle-project.org). The web interface only reports availability; installing is done from the app. See [docs/updates-spec.md](docs/updates-spec.md). Debug and tuning switches (including a debug-only way to simulate an available update) are listed in [docs/debug-settings.md](docs/debug-settings.md).
 
