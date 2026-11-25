@@ -94,6 +94,7 @@ Implemented and unit-tested (rules P1–P9). The manual checklist with real syst
 
 ## Things to know / tradeoffs
 - The workflow can only be proven by running it on GitHub. The hosted image may differ from this Mac (headless audio, package resolution, unsigned build); the PR's own run is the check and may need follow-up commits.
+- **Six tests skip on hosted CI.** The first hosted run built the app and ran everything on Xcode 27.1 / macOS 27; six tests failed only because the DeFeedback Audio Unit isn't installed there (three read the real plugin's identity, three are host logic that hits the "plugin missing" state). They now carry `.requiresPlugin` and are skipped, not failed. Three of them are logic tests that a simulated plugin and devices could run: issue #19.
 - The `set-build-number.sh` change (timestamp / `BUILD_NUMBER`) is in the update-channels PR (#17); this PR doesn't depend on it.
 - `ci-ok` only protects `main` once it is set as a required check; that is a repository setting, not a file.
 

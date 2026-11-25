@@ -14,6 +14,11 @@ On every pull request to `main` and every push to `main`:
    Require **this** check in branch protection (Settings › Branches); adding jobs later only
    means adding them to its `needs`.
 
+Six tests need the real DeFeedback Audio Unit (and some need audio hardware), which hosted
+runners don't have. They are tagged `.requiresPlugin` (`DeFeedbackHostTests/TestTraits.swift`):
+they run on a Mac that has the plugin and show as **skipped** on hosted CI. Simulating the
+plugin and devices so the host-logic ones can run in CI is tracked in #19.
+
 Superseded pull-request runs are cancelled. Creating and notarizing DMGs and publishing updates
 are the release workflow's job, not this one.
 
