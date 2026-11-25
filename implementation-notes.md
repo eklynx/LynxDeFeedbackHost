@@ -83,3 +83,17 @@ Implemented and unit-tested (17 new tests, rules U1–U15). **Not yet done:** en
 ## Status
 Implemented and unit-tested (rules P1–P9). The manual checklist with real system prompts has not been run.
 
+# CI/CD part 1: version script and PR checks (issue #3)
+
+## Decisions not in the spec
+- **Draft reuse:** the unmerged `origin/actions` branch had a full draft CI. This PR takes only its app build/test job and the `ci-ok` gate; SwiftLint, Stream Deck, OpenAPI lint, CodeQL and Dependabot are left for a later PR so this one stays small and the SwiftLint baseline / Spectral config (which I can't verify locally) don't hold it up. The draft's default runner `macos-latest` became the hosted `xcode-27` image (macOS 27 + Xcode 27), keeping its `RUNNER_LABEL` / `XCODE_PATH` overrides.
+- **Tags:** the three existing releases are bare (`0.1.2`), while the versioning notes use `vX.Y.Z`. The script reads both (so the next release is `0.1.3`) and every new tag has the `v`. Re-tagging the old ones was not needed.
+- **Shallow clones fail loudly.** The notes' original script silently fell back to 1.0.0 without tags; this one exits with "fetch the tags" instead.
+- **Numeric tag order:** the `v` is stripped first, then tags are sorted with `sort -t. -k1,1nr -k2,2nr -k3,3nr`, so mixed bare and `v` tags compare by number only. (I didn't rely on `git tag --sort=-v:refname` for the mixed case.)
+- **Script tests are Swift Testing** that run the real script in throwaway git repos (the repo's existing pattern for script tests), so they run in the same CI job as everything else.
+
+## Things to know / tradeoffs
+- The workflow can only be proven by running it on GitHub. The hosted image may differ from this Mac (headless audio, package resolution, unsigned build); the PR's own run is the check and may need follow-up commits.
+- The `set-build-number.sh` change (timestamp / `BUILD_NUMBER`) is in the update-channels PR (#17); this PR doesn't depend on it.
+- `ci-ok` only protects `main` once it is set as a required check; that is a repository setting, not a file.
+
