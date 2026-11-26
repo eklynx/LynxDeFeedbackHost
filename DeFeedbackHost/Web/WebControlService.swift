@@ -9,7 +9,6 @@ import AppKit
 import Foundation
 import Observation
 
-
 // MARK: -
 // MARK: WebControlService
 
@@ -53,7 +52,6 @@ final class WebControlService {
 
     @ObservationIgnored private var cachedIndexPage: Data?
 
-    
     // MARK: - Observable state, for the settings window
 
     private(set) var state: HTTPServer.State = .stopped
@@ -105,7 +103,6 @@ final class WebControlService {
         }
     }
 
-    
     // MARK: - Lifecycle
 
     func reconcile() {
@@ -117,7 +114,7 @@ final class WebControlService {
             state = .failed(WebErrorStrings.ServiceDisabled.rawValue)
             return
         }
-        
+
         let authValid = settings.isAuthenticationComplete
             && (!settings.requiresAuthentication
                 || !password.isEmpty)
@@ -185,7 +182,6 @@ final class WebControlService {
         connectedClients = 0
         state = .stopped
     }
-
 
     // MARK: - Endpoints
 

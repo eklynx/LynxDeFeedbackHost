@@ -34,26 +34,8 @@ enum WebRoutes {
     static let instanceTemplate = "/api/instances/{id}"
 
     static let instance = Route(
-        handlers: [
-            "GET": respond { service, _, id in service.instanceResponse(id: id ?? "") },
-            "HEAD": respond { service, _, id in service.instanceResponse(id: id ?? "") },
-            "PATCH": respond { service, request, id in await service.updateInstance(id: id ?? "", request) },
-            "DELETE": respond { service, _, id in service.removeInstance(id: id ?? "") },
-        ],
+        handlers: ["GET": showInstance, "HEAD": showInstance, "PATCH": patchInstance, "DELETE": deleteInstance],
         wrongMethod: .UseInstanceMethod, allow: "GET, HEAD, PATCH, DELETE")
-
-    private static let page = respond { service, _, _ in service.pageResponse() }
-    private static let status = respond { service, _, _ in .json(service.statusPayload()) }
-    private static let update = respond { service, _, _ in .json(service.updatePayload()) }
-    private static let list = respond { service, _, _ in .json(WebStatusPayload.instanceList(service.host.instances)) }
-    private static let events: Handler = { service, _, _ in
-        .stream(EventStream.preamble) { [weak service] stream in
-            guard let service else { return }
-            Task { @MainActor in
-                service.attachStream(stream)
-            }
-        }
-    }
 
     /// Whole-path routes. A path that is not here is a 404.
     static let table: [String: Route] = [
@@ -62,29 +44,84 @@ enum WebRoutes {
         "/index.html": Route(handlers: ["GET": page], wrongMethod: .UseGET, allow: "GET, HEAD"),
         "/api/status": Route(handlers: ["GET": status, "HEAD": status], wrongMethod: .UseGET, allow: "GET, HEAD"),
         "/api/update": Route(handlers: ["GET": update, "HEAD": update], wrongMethod: .UseGET, allow: "GET, HEAD"),
-        "/api/instances": Route(
-            handlers: ["GET": list, "HEAD": list,
-                       "POST": respond { service, request, _ in await service.addInstance(request) }],
-            wrongMethod: .UseGETorPOST, allow: "GET, HEAD, POST"),
+        "/api/instances": Route(handlers: ["GET": list, "HEAD": list, "POST": addInstance],
+                                wrongMethod: .UseGETorPOST, allow: "GET, HEAD, POST"),
         "/api/events": Route(handlers: ["GET": events], wrongMethod: .UseGET, allow: "GET"),
-        "/api/system": post { service, request in await service.controlSystem(request) },
-        "/api/devices": post { service, request in await service.setDevices(request) },
-        "/api/sample-rate": post { service, request in await service.setSampleRate(request) },
-        "/api/buffer-size": post { service, request in await service.setBufferSize(request) },
+        "/api/system": Route(handlers: ["POST": system], wrongMethod: .UsePOST, allow: "POST"),
+        "/api/devices": Route(handlers: ["POST": devices], wrongMethod: .UsePOST, allow: "POST"),
+        "/api/sample-rate": Route(handlers: ["POST": sampleRate], wrongMethod: .UsePOST, allow: "POST"),
+        "/api/buffer-size": Route(handlers: ["POST": bufferSize], wrongMethod: .UsePOST, allow: "POST")
     ]
 
-    /// A handler that answers with a plain response.
-    private static func respond(
-        _ work: @escaping @MainActor @Sendable (WebControlService, HTTPRequest, String?) async -> HTTPResponse
-    ) -> Handler {
-        { service, request, id in .respond(await work(service, request, id)) }
+    // MARK: - Handlers
+
+    private static func page(_ service: WebControlService, _ request: HTTPRequest,
+                             _ id: String?) -> HTTPServer.RouteOutcome {
+        .respond(service.pageResponse())
     }
 
-    /// A POST-only command route.
-    private static func post(
-        _ work: @escaping @MainActor @Sendable (WebControlService, HTTPRequest) async -> HTTPResponse
-    ) -> Route {
-        Route(handlers: ["POST": respond { service, request, _ in await work(service, request) }],
-              wrongMethod: .UsePOST, allow: "POST")
+    private static func status(_ service: WebControlService, _ request: HTTPRequest,
+                               _ id: String?) -> HTTPServer.RouteOutcome {
+        .respond(.json(service.statusPayload()))
+    }
+
+    private static func update(_ service: WebControlService, _ request: HTTPRequest,
+                               _ id: String?) -> HTTPServer.RouteOutcome {
+        .respond(.json(service.updatePayload()))
+    }
+
+    private static func list(_ service: WebControlService, _ request: HTTPRequest,
+                             _ id: String?) -> HTTPServer.RouteOutcome {
+        .respond(.json(WebStatusPayload.instanceList(service.host.instances)))
+    }
+
+    private static func events(_ service: WebControlService, _ request: HTTPRequest,
+                               _ id: String?) -> HTTPServer.RouteOutcome {
+        .stream(EventStream.preamble) { [weak service] stream in
+            guard let service else { return }
+            Task { @MainActor in
+                service.attachStream(stream)
+            }
+        }
+    }
+
+    private static func system(_ service: WebControlService, _ request: HTTPRequest,
+                               _ id: String?) async -> HTTPServer.RouteOutcome {
+        .respond(await service.controlSystem(request))
+    }
+
+    private static func devices(_ service: WebControlService, _ request: HTTPRequest,
+                                _ id: String?) async -> HTTPServer.RouteOutcome {
+        .respond(await service.setDevices(request))
+    }
+
+    private static func sampleRate(_ service: WebControlService, _ request: HTTPRequest,
+                                   _ id: String?) async -> HTTPServer.RouteOutcome {
+        .respond(await service.setSampleRate(request))
+    }
+
+    private static func bufferSize(_ service: WebControlService, _ request: HTTPRequest,
+                                   _ id: String?) async -> HTTPServer.RouteOutcome {
+        .respond(await service.setBufferSize(request))
+    }
+
+    private static func addInstance(_ service: WebControlService, _ request: HTTPRequest,
+                                    _ id: String?) async -> HTTPServer.RouteOutcome {
+        .respond(await service.addInstance(request))
+    }
+
+    private static func showInstance(_ service: WebControlService, _ request: HTTPRequest,
+                                     _ id: String?) -> HTTPServer.RouteOutcome {
+        .respond(service.instanceResponse(id: id ?? ""))
+    }
+
+    private static func patchInstance(_ service: WebControlService, _ request: HTTPRequest,
+                                      _ id: String?) async -> HTTPServer.RouteOutcome {
+        .respond(await service.updateInstance(id: id ?? "", request))
+    }
+
+    private static func deleteInstance(_ service: WebControlService, _ request: HTTPRequest,
+                                       _ id: String?) -> HTTPServer.RouteOutcome {
+        .respond(service.removeInstance(id: id ?? ""))
     }
 }

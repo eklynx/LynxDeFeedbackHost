@@ -68,7 +68,6 @@ enum WebErrorStrings: String {
     case StrengthDescriptionSuffix = "a whole percentage from 0 to 100"
     case ChannelDescriptionSuffix = "a valid 0-based channel number"
 
-    
     // MARK: - Parameterized errors
     static func pageNotFound(path: String) -> String {
         "Page not found: \(path)"
