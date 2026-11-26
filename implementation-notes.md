@@ -375,3 +375,27 @@ Baseline entries unchanged in number (5); AudioHost's numbers shrank. Next: C2 i
 
 ## Status
 Baseline entries unchanged in number (5); AudioHost's numbers keep shrinking. Next: C3 engine session (needs your hear-test), then C4 device selection.
+
+# Lint cleanup: AudioHost split, step C3 (issue #41, PR C3)
+
+## What I changed in C3
+```text
+Host/Engine/
+├── EngineSession.swift   owns the engine, the AUHAL I/O and runningSampleRate; start / teardown / diagnostics
+└── StartPreflight.swift  the checks before any hardware call, as pure functions of EngineStartSettings
+```
+`startAudio()` (complexity 13, 63 lines) is gone: `EngineSession.start()` is a list of small steps in the original order: preflight devices -> microphone access -> bring both devices to one sample rate -> buffer sizes -> build engine -> parallel setting -> activate instances -> prime with silence -> start I/O. The two refusal checks that need no hardware (`devices`, `sampleRate`) are `StartPreflight`; the rest are private steps. `AudioHost` keeps `start()`, `stop()`, `toggleRunning()`, `isRunning`, and forwards `runningSampleRate`, `diagnostics` and `liveEngine`. `EngineSessionHost` is the one-method protocol the session uses to read the host's choices.
+
+## How I kept behaviour the same
+- **Every hardware call, argument and error is the old one, moved.** The `AudioIO.start(...)` call is unchanged (you wanted to look at AudioIO first).
+- **Same read timing.** The old code read the selected rates *after* the microphone prompt, and the buffer size / parallel setting later still. `EngineSession` asks the host for fresh settings at each of those points instead of capturing everything up front, so a change made while the prompt is open is seen exactly as before.
+- **Handles kept the moment they exist.** `engine` is set when the engine is built and `io` before `io.start`, so `teardown()` after a failure cleans up the same things as before.
+- `EngineSessionCharacterizationTests` pin what `start()` does before touching hardware and what a stopped host reports; run on the old code first. `StartPreflightTests` pin the refusals and their order (they could not be tested before because they were interleaved with hardware calls). Full `DeFeedbackHostTests` green.
+
+## Things to know
+- **Not verified by a machine:** everything after the microphone check (sample-rate switching, buffer sizes, building the engine, starting the I/O, teardown while running) needs a real device and the microphone prompt. The checklist on the pull request is for you.
+- `EngineSession.start()` returns quietly if the host has gone (it can't: the host owns the session).
+- State after C3: class body 672 -> 564 counted lines, file 971 -> 836 lines. The `startAudio` complexity and function-length baseline entries are gone.
+
+## Status
+Baseline 5 -> 3 entries (AudioHost class body and file length, AudioIO).
