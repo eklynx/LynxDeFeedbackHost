@@ -123,24 +123,10 @@ final class AudioHost {
 
     // MARK: - Launch at login and crash restart
     //
-    // Two independent launchd agents back these settings; see `LaunchAgentSettings`.
+    // Two independent launchd agents back these settings; see `LaunchAgentSettings` (the members
+    // that forward to it are in `AudioHost+Launch.swift`).
 
-    @ObservationIgnored private let launch: LaunchAgentSettings
-
-    var launchAtLogin: Bool {
-        get { launch.launchAtLogin }
-        set { launch.launchAtLogin = newValue }
-    }
-
-    var restartAfterCrash: Bool {
-        get { launch.restartAfterCrash }
-        set { launch.restartAfterCrash = newValue }
-    }
-
-    var launchPermissionsNeedApproval: Bool { launch.permissionsNeedApproval }
-    var needsRelaunchToBeSupervised: Bool { launch.needsRelaunchToBeSupervised }
-    func relaunchUnderSupervisor() { launch.relaunchUnderSupervisor() }
-    func refreshLaunchAgentStatus() { launch.refreshStatus() }
+    @ObservationIgnored let launch: LaunchAgentSettings
 
     // MARK: - Startup and new-instance defaults
 
@@ -203,70 +189,15 @@ final class AudioHost {
 
     // MARK: - Instances
     //
-    // The list, its selection and add/remove/rename live in `InstanceList`; these forward to it.
+    // The list, its selection and add/remove/rename live in `InstanceList`; the members that
+    // forward to it are in `AudioHost+Instances.swift`.
 
-    @ObservationIgnored private let instanceList: InstanceList
-
-    var instances: [PluginInstance] { instanceList.instances }
-
-    var selectedInstanceIndex: Int {
-        get { instanceList.selectedInstanceIndex }
-        set { instanceList.selectedInstanceIndex = newValue }
-    }
-
-    var selectedInstance: PluginInstance? { instanceList.selectedInstance }
-    var canShowPreviousInstance: Bool { instanceList.canShowPrevious }
-    var canShowNextInstance: Bool { instanceList.canShowNext }
-    var canAddInstance: Bool { instanceList.canAdd }
-
-    @discardableResult
-    func addInstance() async -> PluginInstance? { await instanceList.add() }
-
-    func instance(id: UUID) -> PluginInstance? { instanceList.instance(id: id) }
-    func instance(named name: String) -> PluginInstance? { instanceList.instance(named: name) }
-
-    func validateName(_ proposed: String, for instance: PluginInstance) -> InstanceNameError? {
-        instanceList.validateName(proposed, for: instance)
-    }
-
-    @discardableResult
-    func rename(_ instance: PluginInstance, to proposed: String) -> InstanceNameError? {
-        instanceList.rename(instance, to: proposed)
-    }
-
-    func removeSelectedInstance() { instanceList.removeSelected() }
-
-    @discardableResult
-    func removeInstance(id: UUID) -> Bool { instanceList.remove(id: id) }
-
-    func showPreviousInstance() { instanceList.showPrevious() }
-    func showNextInstance() { instanceList.showNext() }
-
-    #if DEBUG
-    /// Test seam (debug builds only): gives a bare host something to serve without audio hardware
-    /// or the plugin. Real devices, rates and instances come from `prepare()` and `addInstance()`.
-    func setHardwareForTesting(inputDevices: [AudioDevice],
-                               outputDevices: [AudioDevice],
-                               inputSampleRates: [Double],
-                               outputSampleRates: [Double]) {
-        deviceSelection.setHardwareForTesting(inputDevices: inputDevices,
-                                              outputDevices: outputDevices,
-                                              inputSampleRates: inputSampleRates,
-                                              outputSampleRates: outputSampleRates)
-    }
-
-    /// Test seam (debug builds only): appends an instance that has no plugin loaded behind it, so
-    /// it publishes no Strength parameter and has no slot.
-    @discardableResult
-    func addBareInstanceForTesting(name: String) -> PluginInstance {
-        instanceList.addBare(name: name)
-    }
-    #endif
+    @ObservationIgnored let instanceList: InstanceList
 
     // MARK: - Private state
 
     /// Owns the running engine and its I/O; see `EngineSession`.
-    @ObservationIgnored private let session: EngineSession
+    @ObservationIgnored let session: EngineSession
 
     /// The engine while audio is running; nil when stopped.
     var liveEngine: CoreAudioEngineControl? { session.engine }
@@ -289,7 +220,7 @@ final class AudioHost {
     @ObservationIgnored let changeFlag = SettingsChangeFlag()
 
     /// Saves, autosaves and watches `defaults write` edits; see `SettingsPersistence`.
-    @ObservationIgnored private let persistence: SettingsPersistence
+    @ObservationIgnored let persistence: SettingsPersistence
 
     // MARK: - Load State
 
@@ -362,51 +293,6 @@ final class AudioHost {
     func settingsChanged() { persistence.markDirty() }
 
     func saveSettings() { persistence.save() }
-
-    func currentSettings() -> HostSettings {
-        HostSettings(
-            pluginIdentity: .configured,
-            bufferSize: bufferSize,
-            inputDeviceUID: selectedInputDeviceUID,
-            outputDeviceUID: selectedOutputDeviceUID,
-            inputDeviceName: rememberedInputDeviceName,
-            outputDeviceName: rememberedOutputDeviceName,
-            inputSampleRate: deviceSelection.rateToSave(.input),
-            outputSampleRate: deviceSelection.rateToSave(.output),
-            parallelRendering: parallelRendering,
-            autoRunOnStartup: autoRunOnStartup,
-            newInstancesStartMuted: newInstancesMuted,
-            newInstancesStartBypassed: newInstancesBypassed,
-            selectedInstanceIndex: selectedInstanceIndex,
-            instances: instances.map { instance in
-                InstanceSettings(
-                    name: instance.name,
-                    inputChannel: instance.inputChannel,
-                    outputChannel: instance.outputChannel,
-                    isBypassed: instance.isBypassed,
-                    isMuted: instance.isMuted,
-                    pluginState: PluginStateCoding.data(from: instance.pluginState),
-                    parameterValues: instance.parameterValues)
-            },
-            webServer: webServerSettings)
-    }
-
-    /// Applies preferences read from outside the app. Buffer size and parallel rendering are
-    /// locked while running, so `includingLockedWhileRunning` is false then and those wait.
-    func apply(_ external: HostPreferences, includingLockedWhileRunning: Bool) {
-        if external.autoRunOnStartup != autoRunOnStartup { autoRunOnStartup = external.autoRunOnStartup }
-        if external.newInstancesStartMuted != newInstancesMuted { newInstancesMuted = external.newInstancesStartMuted }
-        if external.newInstancesStartBypassed != newInstancesBypassed { newInstancesBypassed = external.newInstancesStartBypassed }
-        guard includingLockedWhileRunning else { return }
-        if external.parallelRendering != parallelRendering { parallelRendering = external.parallelRendering }
-        if external.bufferSize != bufferSize { bufferSize = external.bufferSize }
-    }
-
-    func reconcileInstancesFromPlugin() {
-        for instance in instances {
-            instance.reconcileMuteFromPlugin()
-        }
-    }
 
     /// Refreshes the list of devices and their functionalities
     func refreshDevices() {
