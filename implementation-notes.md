@@ -215,3 +215,11 @@ That `secrets: inherit` is enough. The next Release dry run is the test. If the 
 ## Status
 Implemented and unit-tested (rules PRE1–PRE9 and V11–V13). The real runs are in the manual checklist in `docs/prerelease-spec.md`.
 
+# CI/CD: pruning orders by publish time (issue #3)
+
+## What I found
+After the first real nightly, `gh release list` showed `createdAt` 00:48:47Z for a release published at 01:07:52Z: for a release, GitHub's `createdAt` is the **date of the commit the tag points at**, not when the release was made. The prune workflow ordered by `createdAt`, so builds made from the same commit (a forced nightly re-run, or two betas without new commits) would tie, and the wrong one could be pruned. Nothing had been pruned yet (fewer than 7 nightlies exist), so no build was lost.
+
+## What I changed
+The prune workflow now passes `publishedAt` (the real time). A draft has no `publishedAt` and is never selected. Tests pin the ordering with same-time-commit builds and that the workflow doesn't mention `createdAt`.
+

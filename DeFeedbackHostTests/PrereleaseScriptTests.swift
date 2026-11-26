@@ -114,6 +114,26 @@ struct PrereleaseScriptTests {
         #expect(!nightlies.contains("beta"), "a nightly prune must not see pre-releases")
     }
 
+    @Test("PRE7: builds of the same commit are told apart by publish time, and a release without one is never pruned")
+    func selectOrdersByPublishTime() throws {
+        // Two betas from the SAME commit share GitHub's createdAt (the commit date) but not their publish time.
+        let lines = ["v1.1.0-beta.1\t2026-11-01T10:00:00Z", "v1.1.0-beta.2\t2026-11-01T12:00:00Z", "v1.1.0-beta.3\t2026-11-01T11:00:00Z"]
+        #expect(try select(lines, kind: "prerelease", keep: "2").stdout == "v1.1.0-beta.1\n",
+                "the OLDEST by publish time goes, whatever order the lines arrive in")
+        // A draft has no publish time (an empty field): it can't be ordered, so it is never selected.
+        #expect(try select(lines + ["v1.1.0-beta.4\t"], kind: "prerelease", keep: "1").stdout.contains("beta.4") == false)
+    }
+
+    @Test("PRE7: the prune workflow feeds the script the PUBLISH time, not createdAt (the commit date)")
+    func pruneWorkflowUsesPublishedAt() throws {
+        let workflow = try text(".github/workflows/prune-builds.yml")
+        #expect(workflow.contains("--json tagName,publishedAt"))
+        #expect(workflow.contains(".tagName,.publishedAt"))
+        // The command that fetches the data must not ask for createdAt (its comment may explain why not).
+        let fetch = try #require(workflow.split(separator: "\n").first { $0.contains("gh release list") && !$0.contains("#") })
+        #expect(!fetch.contains("createdAt"), "createdAt is the commit date for a release and must not be used to order builds")
+    }
+
     @Test("PRE7: a kind is required and keep must be 1 or more")
     func selectValidatesItsArguments() throws {
         #expect(try run([prune, "select", "--keep", "3"], input: "").status != 0, "--kind is required")
