@@ -314,7 +314,7 @@ final class WebControlService {
     // MARK: - Endpoints
 
     // endpoint routing
-    private func routeEndpoint(_ request: HTTPRequest) async -> HTTPServer.RouteOutcome {
+    func routeEndpoint(_ request: HTTPRequest) async -> HTTPServer.RouteOutcome {
 
         if let id = Self.extractPathFromTemplate(in: request.path, matching: "/api/instances/{id}") {
             switch request.method {
