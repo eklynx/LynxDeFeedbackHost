@@ -272,3 +272,29 @@ Validation uses `throws` (a `WebRejection` carries the response) instead of the 
 
 ## Status
 Baseline: 21 -> 13 findings (all of WebControlService's gone). Left: AudioHost, HTTPMessage, ContentView, PluginInstance, AudioIO, HTTPServer.
+
+# Lint cleanup: HTTP parser and server split (issue #41, PR A)
+
+## What I changed
+```text
+Web/
+├── HTTPMessage.swift         HTTPHeaders / HTTPRequest / HTTPResponse (reason phrases are now a table)
+├── HTTPRequestParser.swift   moved out of HTTPMessage; parse() is a list of small stages
+├── HTTPServer.swift          listener, lifecycle, accept
+├── HTTPConnection.swift      one connection: read, parse, dispatch, write, idle timer (moved as is)
+└── HTTPStream.swift          the SSE hand-off (moved as is)
+```
+- `parse` was one 73-line function at complexity 17. Each check is now its own function (`headerBlockEnd`, `headerLines`, `requestLine`, `headerFields`, `refuseTransferEncoding`, `declaredBodyLength`) that returns what it found or throws a private `Refusal` carrying the response. `parse` catches it once. Typed throws (`throws(Refusal)`) keeps the catch from needing a fallback branch.
+- `defaultReason` was a 16-case switch (complexity 17); it is now a `[Int: String]` lookup with the same "Status N" fallback.
+- `HTTPServer.swift` (488 lines) lost `HTTPConnection` and `HTTPStream`, which moved untouched. No access levels changed.
+
+## How I kept behaviour the same
+- First added `HTTPParserCharacterizationTests` (pins which refusal wins when a request is wrong two ways, every message, the exact size caps, padded and zero Content-Length, the reason table) and ran it on the OLD code: all passed there and still pass.
+- The full `DeFeedbackHostTests` run is green.
+
+## Things to know
+- No socket-level test exists for `HTTPConnection`/`HTTPServer`; the split there is a pure move, so the compiler plus the existing suite is the evidence.
+- A malformed request that is wrong in two ways still reports the earlier problem; the order is now documented in the parser's header comment.
+
+## Status
+Baseline: 13 -> 9 findings. Left: AudioHost (4), ContentView (2), PluginInstance (2), AudioIO (1).
