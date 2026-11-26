@@ -401,6 +401,18 @@ struct NightlyScriptTests {
         #expect(nightly.contains("kind: nightly") && release.contains("kind: release"))
     }
 
+    @Test("N10: both callers pass secrets through, or the shared build's environment secrets arrive empty")
+    func callersInheritSecrets() throws {
+        // Found by the first dry run through the shared build: the certificate secret was empty until
+        // the callers passed `secrets: inherit`. Pinned so a refactor can't silently drop it.
+        for path in [".github/workflows/release.yml", ".github/workflows/nightly.yml"] {
+            let caller = try text(path)
+            let build = try #require(caller.components(separatedBy: "uses: ./.github/workflows/build-and-publish.yml").last?
+                .components(separatedBy: "\n  prune:\n").first)
+            #expect(build.contains("secrets: inherit"), "\(path) must pass secrets to the shared build")
+        }
+    }
+
     @Test("N9: a dry run publishes and prunes nothing; prune has no signing secrets and runs only after a good build")
     func dryRunAndPruneRules() throws {
         let nightly = try text(".github/workflows/nightly.yml")
