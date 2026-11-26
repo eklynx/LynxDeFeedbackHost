@@ -37,11 +37,13 @@ final class AudioHost {
         self.defaults = defaults
         self.launch = LaunchAgentSettings(agents: launchAgents, supervision: supervision)
         self.persistence = SettingsPersistence(defaults: defaults, changeFlag: changeFlag)
+        self.instanceList = InstanceList(changeFlag: changeFlag)
         self.isPluginInstalled = pluginInstalled ?? PluginConfiguration.isInstalled
         self.pluginAvailabilityOverride = pluginInstalled != nil
 
         launch.onError = { [weak self] message in self?.errorMessage = message }
         persistence.host = self
+        instanceList.host = self
     }
 
     // MARK: - Plugin availability
@@ -489,8 +491,45 @@ final class AudioHost {
     }
 
     // MARK: - Instances
+    //
+    // The list, its selection and add/remove/rename live in `InstanceList`; these forward to it.
 
-    private(set) var instances: [PluginInstance] = []
+    @ObservationIgnored private let instanceList: InstanceList
+
+    var instances: [PluginInstance] { instanceList.instances }
+
+    var selectedInstanceIndex: Int {
+        get { instanceList.selectedInstanceIndex }
+        set { instanceList.selectedInstanceIndex = newValue }
+    }
+
+    var selectedInstance: PluginInstance? { instanceList.selectedInstance }
+    var canShowPreviousInstance: Bool { instanceList.canShowPrevious }
+    var canShowNextInstance: Bool { instanceList.canShowNext }
+    var canAddInstance: Bool { instanceList.canAdd }
+
+    @discardableResult
+    func addInstance() async -> PluginInstance? { await instanceList.add() }
+
+    func instance(id: UUID) -> PluginInstance? { instanceList.instance(id: id) }
+    func instance(named name: String) -> PluginInstance? { instanceList.instance(named: name) }
+
+    func validateName(_ proposed: String, for instance: PluginInstance) -> InstanceNameError? {
+        instanceList.validateName(proposed, for: instance)
+    }
+
+    @discardableResult
+    func rename(_ instance: PluginInstance, to proposed: String) -> InstanceNameError? {
+        instanceList.rename(instance, to: proposed)
+    }
+
+    func removeSelectedInstance() { instanceList.removeSelected() }
+
+    @discardableResult
+    func removeInstance(id: UUID) -> Bool { instanceList.remove(id: id) }
+
+    func showPreviousInstance() { instanceList.showPrevious() }
+    func showNextInstance() { instanceList.showNext() }
 
     #if DEBUG
     /// Set by `setHardwareForTesting`: the devices are fakes, so nothing may query or change the
@@ -515,32 +554,16 @@ final class AudioHost {
     /// it publishes no Strength parameter and has no slot.
     @discardableResult
     func addBareInstanceForTesting(name: String) -> PluginInstance {
-        let instance = PluginInstance(name: name, changeFlag: changeFlag)
-        instances.append(instance)
-        return instance
+        instanceList.addBare(name: name)
     }
     #endif
-
-    var selectedInstanceIndex = 0 {
-        didSet { settingsChanged() }
-    }
-
-    var selectedInstance: PluginInstance? {
-        instances.indices.contains(selectedInstanceIndex) ? instances[selectedInstanceIndex] : nil
-    }
-
-    var canShowPreviousInstance: Bool { selectedInstanceIndex > 0 }
-    var canShowNextInstance: Bool { selectedInstanceIndex < instances.count - 1 }
-
-    /// Returns if another instance can be created.  False if plugin is not installed, or we have hit the maxiumum number of istances
-    /// (this would be a hard limit due to memory allocation, not an advisory warning due to performance)
-    var canAddInstance: Bool {
-        isPluginInstalled && instances.count < PluginConfiguration.maximumInstanceCount
-    }
 
     // MARK: - Private state
 
     @ObservationIgnored private var engineController: CoreAudioEngineControl?
+
+    /// The engine while audio is running; nil when stopped.
+    var liveEngine: CoreAudioEngineControl? { engineController }
     @ObservationIgnored private var io: AudioIO?
     @ObservationIgnored private var deviceMonitor: DeviceListMonitor?
 
@@ -580,7 +603,7 @@ final class AudioHost {
         watchPluginRegistrations()
 
         restoreAudioDevicesState(from: settings)
-        await restoreInstances(from: settings)
+        await instanceList.restore(from: settings)
 
         persistence.finishRestoring(with: settings)
 
@@ -642,58 +665,12 @@ final class AudioHost {
         }
     }
 
-    private func restoreInstances(from settings: HostSettings) async {
-        let saved = settings.instances.prefix(PluginConfiguration.maximumInstanceCount)
-        guard !saved.isEmpty else { return }
-
-        let names = Self.restoredNames(saved.map(\.name))
-
-        for (persisted, name) in zip(saved, names) {
-            let instance = PluginInstance(name: name, changeFlag: changeFlag)
-            instance.inputChannel = persisted.inputChannel
-            instance.outputChannel = persisted.outputChannel
-            instance.isMuted = persisted.isMuted
-            instance.isBypassed = persisted.isBypassed
-            instances.append(instance)
-
-            await instance.load(restoring: PluginStateCoding.state(from: persisted.pluginState),
-                                parameters: persisted.parameterValues)
-
-            if let error = instance.loadError, isPluginInstalled {
-                errorMessage = error
-            }
-        }
-
-        selectedInstanceIndex = min(max(0, settings.selectedInstanceIndex),
-                                    max(0, instances.count - 1))
-    }
-
-    nonisolated static func restoredNames(_ saved: [String?]) -> [String] {
-        var kept: [String?] = []
-        for candidate in saved {
-            let name = candidate.map(InstanceName.normalized)
-            if let name, InstanceName.validate(name, among: kept.compactMap { $0 }) == nil {
-                kept.append(name)
-            } else {
-                kept.append(nil)
-            }
-        }
-
-        var resolved = kept.compactMap { $0 }
-        return kept.map { name in
-            if let name { return name }
-            let fallback = InstanceName.defaultName(among: resolved)
-            resolved.append(fallback)
-            return fallback
-        }
-    }
-
     // MARK: - Save Settings
 
     /// Applies edits made to the individual preference keys (for example `defaults write`).
     func applyExternalPreferences() { persistence.applyExternalPreferences() }
 
-    private func settingsChanged() { persistence.markDirty() }
+    func settingsChanged() { persistence.markDirty() }
 
     func saveSettings() { persistence.save() }
 
@@ -904,7 +881,7 @@ final class AudioHost {
             instanceThreshold: PluginConfiguration.parallelRenderingInstanceThreshold)
 
         for instance in instances {
-            try activateInstance(instance, in: controller)
+            try instanceList.activate(instance, in: controller)
         }
         controller.primeWithSilence(frameCount: maximumFrameCount * 2)
 
@@ -966,145 +943,6 @@ final class AudioHost {
         runningSampleRate = 0
     }
 
-    // MARK: - Instances
-
-    /// Adds an instance and loads the configured audio unit into it.
-    ///
-    /// - Returns: a new instance, or `nil` if we are capped. An instance whose
-    ///   *plugin* failed to load is still returned, but with its `loadError` populated with the reason.
-    @discardableResult
-    func addInstance() async -> PluginInstance? {
-        guard isPluginInstalled else {
-            errorMessage = AudioHostError.pluginNotInstalled.localizedDescription
-            return nil
-        }
-        guard canAddInstance else {
-            errorMessage = AudioHostError.maxInstancesReached.localizedDescription
-            return nil
-        }
-
-        let instance = PluginInstance(name: InstanceName.defaultName(among: instances.map(\.name)),
-                                      changeFlag: changeFlag)
-
-        let next = instances.count
-        instance.inputChannel = inputChannelCount > 0 ? min(next, inputChannelCount - 1) : 0
-        instance.outputChannel = outputChannelCount > 0 ? min(next, outputChannelCount - 1) : 0
-
-        instances.append(instance)
-        selectedInstanceIndex = instances.count - 1
-        settingsChanged()
-
-        await instance.load()
-
-        guard instances.contains(where: { $0 === instance }) else { return nil }
-
-        guard instance.audioUnit != nil else {
-            errorMessage = instance.loadError
-            return instance
-        }
-
-        instance.isMuted = newInstancesMuted
-        instance.isBypassed = newInstancesBypassed
-
-        if isRunning, let engineController {
-            do {
-                try activateInstance(instance, in: engineController)
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-        }
-
-        return instance
-    }
-
-    func instance(id: UUID) -> PluginInstance? {
-        instances.first { $0.id == id }
-    }
-
-    /// Looks up an instance by its unique name (case-insensitive, like the uniqueness check).
-    func instance(named name: String) -> PluginInstance? {
-        instances.first { InstanceName.matches($0.name, name) }
-    }
-
-    /// Checks whether `proposed` would be a valid name for `instance`, without renaming it.
-    func validateName(_ proposed: String, for instance: PluginInstance) -> InstanceNameError? {
-        let others = instances.filter { $0 !== instance }.map(\.name)
-        return InstanceName.validate(InstanceName.normalized(proposed), among: others)
-    }
-
-    /// Renames an instance with rule checks.
-    ///
-    /// - Returns: nil on success (or if unchanged), else error reason.
-    @discardableResult
-    func rename(_ instance: PluginInstance, to proposed: String) -> InstanceNameError? {
-        if let error = validateName(proposed, for: instance) {
-            return error
-        }
-        let name = InstanceName.normalized(proposed)
-        guard name != instance.name else { return nil }
-        instance.name = name
-        settingsChanged()
-        return nil
-    }
-
-    func removeSelectedInstance() {
-        remove(at: selectedInstanceIndex)
-    }
-
-    /// Removes an instance by instanceId.
-    ///
-    /// - Returns: false if instance not found, i.e. already deleted
-    @discardableResult
-    func removeInstance(id: UUID) -> Bool {
-        guard let index = instances.firstIndex(where: { $0.id == id }) else { return false }
-        remove(at: index)
-        return true
-    }
-
-    private func remove(at index: Int) {
-        guard instances.indices.contains(index) else { return }
-        let instance = instances.remove(at: index)
-
-        if index < selectedInstanceIndex {
-            selectedInstanceIndex -= 1
-        }
-        selectedInstanceIndex = min(selectedInstanceIndex, max(0, instances.count - 1))
-
-        settingsChanged()
-        retire(instance)
-    }
-
-    private func activateInstance(_ instance: PluginInstance, in engine: CoreAudioEngineControl) throws {
-        guard let slot = engine.claimSlot() else { throw AudioHostError.maxInstancesReached }
-
-        do {
-            try instance.attach(to: engine, slot: slot)
-        } catch {
-            engine.release(slot)
-            throw error
-        }
-    }
-
-    /// makes sure the instance is out of the render path safely before deleting
-    private func retire(_ instance: PluginInstance) {
-        instance.stopObservingParameters()
-
-        guard let engineController, let slot = instance.slot else {
-            instance.teardownRenderResources()
-            return
-        }
-
-        engineController.retire(slot)
-        instance.slot = nil
-
-        let bufferSeconds = Double(engineController.maximumFrameCount) / max(runningSampleRate, 8_000)
-        Task {
-            try? await Task.sleep(for: .seconds(bufferSeconds * 2))
-            engineController.release(slot)
-            instance.teardownRenderResources()
-        }
-    }
-
     // MARK: - Diagnostics
 
     typealias Diagnostics = EngineDiagnostics
@@ -1130,15 +968,4 @@ final class AudioHost {
             workerThreadPolicies: engineController.workerThreadPolicies,
             parallelRenderingEngaged: engineController.isParallelRenderingEngaged)
     }
-
-    // MARK: - Gallery View Controller
-
-    func showPreviousInstance() {
-        selectedInstanceIndex = max(0, selectedInstanceIndex - 1)
-    }
-
-    func showNextInstance() {
-        selectedInstanceIndex = min(instances.count - 1, selectedInstanceIndex + 1)
-    }
-
 }
