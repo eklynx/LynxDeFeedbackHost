@@ -1,0 +1,9 @@
+{
+	"extends": "../../tsconfig.json",
+	"compilerOptions": {
+		"noEmitOnError": false,
+		"rootDir": "../..",
+		"outDir": "../../build/encoder-sim"
+	},
+	"include": ["../../src/**/*.ts", "entry.ts"]
+}
