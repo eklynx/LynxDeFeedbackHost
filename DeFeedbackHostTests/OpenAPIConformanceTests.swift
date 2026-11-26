@@ -5,7 +5,7 @@
 //  Keeps `openapi.yaml` honest.
 //
 //  A hand-written API document rots the moment someone adds a route or a status field and doesn't
-//  think to open it. These tests read both the document and `WebControlService.swift` as text and
+//  think to open it. These tests read both the document and `WebStatusPayload.swift` and `WebRoutes.swift` as text and
 //  fail when they disagree, so the reminder arrives at the same time as the change rather than
 //  whenever a client next gets confused.
 //
@@ -35,8 +35,14 @@ private enum Sources {
 
     static var document: String? { text("openapi.yaml") }
 
-    static var service: String? {
-        text("DeFeedbackHost/Web/WebControlService.swift")
+    /// Builds the status payload.
+    static var payload: String? {
+        text("DeFeedbackHost/Web/WebStatusPayload.swift")
+    }
+
+    /// The route table.
+    static var routes: String? {
+        text("DeFeedbackHost/Web/WebRoutes.swift")
     }
 
     /// The body of a function, from its declaration to the first line that closes it.
@@ -50,12 +56,14 @@ private enum Sources {
 
 /// Reading the two files is the precondition for everything below. If the checkout moved, say so
 /// once here rather than failing every test with the same confusing message.
-private func requireSources() throws -> (document: String, service: String) {
+private func requireSources() throws -> (document: String, payload: String, routes: String) {
     let document = try #require(Sources.document,
                                 "openapi.yaml not found next to the project")
-    let service = try #require(Sources.service,
-                               "WebControlService.swift not found")
-    return (document, service)
+    let payload = try #require(Sources.payload,
+                               "WebStatusPayload.swift not found")
+    let routes = try #require(Sources.routes,
+                              "WebRoutes.swift not found")
+    return (document, payload, routes)
 }
 
 struct OpenAPIConformanceTests {
@@ -65,9 +73,9 @@ struct OpenAPIConformanceTests {
     /// This is the one that will fire: adding a field to the payload is a one-line change and
     /// exactly the sort of thing that reaches a client undocumented.
     @Test func everyStatusFieldIsDocumented() throws {
-        let (document, service) = try requireSources()
+        let (document, source, _) = try requireSources()
 
-        let payload = try #require(Sources.functionBody("private func statusPayload", in: service))
+        let payload = try #require(Sources.functionBody("func status(", in: source))
         let emitted = keys(in: payload)
 
         #expect(!emitted.isEmpty, "couldn't read any keys out of statusPayload()")
@@ -82,9 +90,9 @@ struct OpenAPIConformanceTests {
 
     /// And the reverse: a field removed from the payload must not linger in the document.
     @Test func theDocumentInventsNoStatusFields() throws {
-        let (document, service) = try requireSources()
+        let (document, source, _) = try requireSources()
 
-        let payload = try #require(Sources.functionBody("private func statusPayload", in: service))
+        let payload = try #require(Sources.functionBody("func status(", in: source))
         let emitted = keys(in: payload)
 
         let required = try #require(requiredFieldNames(in: document),
@@ -99,9 +107,7 @@ struct OpenAPIConformanceTests {
 
     /// Every path in the route table has to appear in the document, and vice versa.
     @Test func everyRouteIsDocumented() throws {
-        let (document, service) = try requireSources()
-
-        let table = try #require(Sources.functionBody("private func routeEndpoint(", in: service))
+        let (document, _, table) = try requireSources()
         let routed = paths(in: table)
 
         #expect(!routed.isEmpty, "couldn't read any paths out of the route table")
@@ -120,7 +126,7 @@ struct OpenAPIConformanceTests {
     /// The wire version is stated in three places; they have to agree, or a client will be told
     /// a version the payload doesn't carry.
     @Test func theProtocolVersionAgrees() throws {
-        let (document, _) = try requireSources()
+        let (document, _, _) = try requireSources()
         let version = WebControlService.protocolVersion
 
         #expect(document.contains("x-protocol-version: \(version)"),
@@ -132,7 +138,7 @@ struct OpenAPIConformanceTests {
     /// The limits are quoted in the document as concrete numbers, which is only useful if they're
     /// the real ones.
     @Test func thePublishedLimitsAreTheRealOnes() throws {
-        let (document, _) = try requireSources()
+        let (document, _, _) = try requireSources()
 
         #expect(document.contains("\(HTTPServer.maximumConnections) concurrent connections"))
         #expect(document.contains("\(HTTPRequestParser.maximumBodyBytes / 1024) KiB of request body"))
@@ -145,7 +151,7 @@ struct OpenAPIConformanceTests {
     /// The instance cap is quoted in two places in the document — the 409 example and the
     /// `maxInstanceCount` example — and both are copied from a constant that can change.
     @Test func theDocumentedInstanceCapMatches() throws {
-        let (document, _) = try requireSources()
+        let (document, _, _) = try requireSources()
 
         #expect(document.contains(AudioHostError.maxInstancesReached.localizedDescription),
                 "the 409 example isn't the message the host actually sends")
@@ -158,7 +164,7 @@ struct OpenAPIConformanceTests {
     /// Both come from `PluginConfiguration`, which is where the host gets repointed at another
     /// plugin, so both can change without anyone thinking about this file.
     @Test func theDocumentedPluginNoticeMatches() throws {
-        let (document, _) = try requireSources()
+        let (document, _, _) = try requireSources()
 
         #expect(document.contains(PluginConfiguration.notInstalledMessage),
                 "the 409 example isn't the sentence the host actually sends")
@@ -170,7 +176,7 @@ struct OpenAPIConformanceTests {
     /// example, the `BufferSizeRequest` example and the 400 message — and all three are copied
     /// from one constant that can change.
     @Test func theDocumentedBufferSizesMatch() throws {
-        let (document, _) = try requireSources()
+        let (document, _, _) = try requireSources()
 
         let sizes = PluginConfiguration.validBufferSizes
         let list = sizes.map(String.init).joined(separator: ", ")
@@ -183,13 +189,13 @@ struct OpenAPIConformanceTests {
 
     /// The realm appears in the document as the string a browser will display.
     @Test func theAuthenticationRealmMatches() throws {
-        let (document, _) = try requireSources()
+        let (document, _, _) = try requireSources()
         #expect(document.contains("realm=\"\(BasicAuth.realm)"))
     }
 
     /// The default port in the `servers` block should be the one a fresh install listens on.
     @Test func theDocumentedDefaultPortMatches() throws {
-        let (document, _) = try requireSources()
+        let (document, _, _) = try requireSources()
         #expect(document.contains("default: \"\(WebServerSettings().port)\""))
         #expect(document.contains("\(WebServerSettings.portRange.lowerBound)–"
                                   + "\(WebServerSettings.portRange.upperBound)"))
