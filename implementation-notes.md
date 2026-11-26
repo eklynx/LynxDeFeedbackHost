@@ -223,3 +223,21 @@ After the first real nightly, `gh release list` showed `createdAt` 00:48:47Z for
 ## What I changed
 The prune workflow now passes `publishedAt` (the real time). A draft has no `publishedAt` and is never selected. Tests pin the ordering with same-time-commit builds and that the workflow doesn't mention `createdAt`.
 
+
+# CI/CD: static checks: SwiftLint, CodeQL, Dependabot (issue #3)
+
+## Decisions not in the spec
+- **SwiftLint fails only on new findings.** The draft's baseline (17 Oct) was stale, so I regenerated it with SwiftLint 0.65.1: 160 findings (155 warnings, 5 errors) across 19 files are recorded, and the baseline was checked to give 0 findings from a copy of the repo in another directory (paths are relative).
+- **SwiftLint is pinned, not brew-installed.** The job downloads `portable_swiftlint.zip` of one release and verifies its SHA-256. A new SwiftLint therefore can't turn `main` red by adding rules; raising the pin is a PR.
+- **The lint job joins `ci-ok`** (the required check from the branch protection), so it blocks merging.
+- **CodeQL is in place but disabled, as asked** (issue #34): only `workflow_dispatch` is live; the push, pull request and schedule triggers are commented out, with a test pinning that. The matrix is Swift (manual build), JavaScript/TypeScript and Actions. I replaced the draft's older action SHA with the current v4 commit.
+- **Dependabot also covers Swift packages** (Sparkle), added to the draft's Actions and npm; minor/patch updates are grouped per ecosystem.
+- **Left out of the draft:** the Stream Deck typecheck job and the OpenAPI (Spectral) lint. Not requested; the DMG job already builds the plugin, and Spectral would likely report many findings.
+
+## Things to know / tradeoffs
+- The baseline is a debt list, 160 entries long. Regenerating it hides violations, so only do that after fixing some.
+- The lint job needs a macOS runner (same label as the build) because the pinned binary is the macOS one.
+- Not run on GitHub yet: the lint job and the first Dependabot run (after merge).
+
+## Status
+Implemented and unit-tested (rules S1–S8).
