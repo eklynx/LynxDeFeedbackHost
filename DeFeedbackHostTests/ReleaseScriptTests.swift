@@ -248,29 +248,46 @@ struct ReleaseScriptTests {
 
     // MARK: R1 / R5 / R6: the shape of the workflow
 
+    /// The shared build (guard, tests, sign, notarize, publish) used by the release and the nightly.
     private func workflow() throws -> String {
+        try String(contentsOf: repoRoot.appending(path: ".github/workflows/build-and-publish.yml"), encoding: .utf8)
+    }
+
+    /// The thin manual-release caller.
+    private func releaseCaller() throws -> String {
         try String(contentsOf: repoRoot.appending(path: ".github/workflows/release.yml"), encoding: .utf8)
     }
 
-    /// The text of each step of the `release` job.
+    /// The text of each step of the `publish` job.
     private func releaseSteps() throws -> [String] {
         let text = try workflow()
-        let job = try #require(text.components(separatedBy: "\n  release:\n").last)
+        let job = try #require(text.components(separatedBy: "\n  publish:\n").last)
         return job.components(separatedBy: "\n      - ").dropFirst().map { $0 }
     }
 
     @Test("R1: a release is manual only, runs from main, and its secrets are in the release environment")
     func workflowIsManualAndGuarded() throws {
-        let text = try workflow()
-        let triggers = try #require(text.components(separatedBy: "\npermissions:").first)
+        // The caller: manual only, one build at a time, no secrets of its own, releases the shared build.
+        let caller = try releaseCaller()
+        let triggers = try #require(caller.components(separatedBy: "\npermissions:").first)
         #expect(triggers.contains("workflow_dispatch:"))
         #expect(!triggers.contains("pull_request"), "a pull request must never be able to start a release")
         #expect(!triggers.contains("\n  push:"))
         #expect(!triggers.contains("schedule:"))
+        #expect(caller.contains("group: release") && caller.contains("cancel-in-progress: false"))
+        #expect(caller.contains("uses: ./.github/workflows/build-and-publish.yml"))
+        #expect(caller.contains("kind: release"))
+        #expect(!caller.contains("secrets."), "the caller must not touch secrets; the shared build reads them")
+
+        // The shared build: only callable, guarded, and secrets only from the release environment.
+        let text = try workflow()
+        let sharedTriggers = try #require(text.components(separatedBy: "\npermissions:").first)
+        #expect(sharedTriggers.contains("workflow_call:"))
+        #expect(!sharedTriggers.contains("workflow_dispatch") && !sharedTriggers.contains("pull_request")
+                    && !sharedTriggers.contains("schedule:"), "the shared build must only run when called")
         #expect(text.contains("refs/heads/main"), "the main-only guard is missing")
         #expect(text.contains("already exists"), "the existing-tag guard is missing")
         #expect(text.contains("environment: release"))
-        #expect(text.contains("group: release") && text.contains("cancel-in-progress: false"))
     }
 
     @Test("R5: secrets appear only as environment values, never in a command line")

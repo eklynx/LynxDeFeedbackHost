@@ -33,6 +33,8 @@
 # Other environment:
 #   SPARKLE_BIN   directory containing sign_update (default: the SPM artifact in derived data).
 #   GITHUB_REPO   owner/name for download URLs (default eklynx/LynxDeFeedbackHost).
+#   RELEASE_NOTES  text for the new GitHub Release (with --upload). Unset: GitHub generates the notes.
+#                 CI sets it for nightlies ("Not a release.").
 #   RELEASE_TARGET  commit the new tag should point at (with --upload). CI sets it to the commit it
 #                 built, so the tag lands on the tested code even if main moved meanwhile. Unset: the
 #                 repository's default branch head.
@@ -58,7 +60,7 @@ while [ $# -gt 0 ]; do
         --channel) CHANNEL="${2:?}"; shift 2 ;;
         --tag) TAG="${2:?}"; shift 2 ;;
         --upload) UPLOAD=YES; shift ;;
-        -h|--help) sed -n '2,41p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,43p' "$0"; exit 0 ;;
         *) die "unknown option: $1" ;;
     esac
 done
@@ -148,14 +150,11 @@ if [ "${UPLOAD}" = "YES" ]; then
     if gh release view "${TAG}" --repo "${GITHUB_REPO}" >/dev/null 2>&1; then
         gh release upload "${TAG}" "${DMG}" --repo "${GITHUB_REPO}" --clobber
     else
-        if [ "${CHANNEL}" = "release" ]; then
-            gh release create "${TAG}" "${DMG}" --repo "${GITHUB_REPO}" --title "${TAG}" --generate-notes \
-                ${RELEASE_TARGET:+--target "${RELEASE_TARGET}"}
-        else
-            gh release create "${TAG}" "${DMG}" --repo "${GITHUB_REPO}" --title "${TAG}" \
-                --prerelease --latest=false --generate-notes \
-                ${RELEASE_TARGET:+--target "${RELEASE_TARGET}"}
-        fi
+        set -- "${TAG}" "${DMG}" --repo "${GITHUB_REPO}" --title "${TAG}"
+        if [ -n "${RELEASE_NOTES:-}" ]; then set -- "$@" --notes "${RELEASE_NOTES}"; else set -- "$@" --generate-notes; fi
+        if [ -n "${RELEASE_TARGET:-}" ]; then set -- "$@" --target "${RELEASE_TARGET}"; fi
+        if [ "${CHANNEL}" != "release" ]; then set -- "$@" --prerelease --latest=false; fi
+        gh release create "$@"
     fi
 fi
 

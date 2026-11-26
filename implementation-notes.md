@@ -169,3 +169,21 @@ The first release dry run failed in the "Create DMG" phase of the archive with `
 ## Status
 Implemented and unit-tested (rules C1–C9). Not run on GitHub yet: the scheduled and manual runs need this on `main`.
 
+# CI/CD: nightly builds, shared build, pruning (issue #3)
+
+## Decisions not in the spec
+- **One shared build.** The release steps moved into `build-and-publish.yml` (a reusable workflow with `kind` = release | nightly); `release.yml` is now a thin manual caller and `nightly.yml` the scheduled one. The signing/notary secrets are still read only inside the shared build's job, which sets `environment: release`; a test fails if either caller mentions a secret. GitHub's docs say a called job that declares an environment uses that environment's secrets; the dry runs are the proof.
+- **Skip rule** compares `main` with the newest `nightly-*` tag (ordered by the 14-digit stamp in its name, not by commit date) and with the newest release tag (numeric order, bare or `v`). A release made at the current commit therefore doesn't get a twin nightly.
+- **The DMG is named with the full version** through an optional `DMG_VERSION`, so several nightlies of the same patch don't share a file name.
+- **Feed first, releases second** when pruning, so the appcast never points at a deleted download. If the feed push fails, nothing is deleted.
+- **Pruning is conservative:** it can only name `nightly-*` tags and only removes items on the `nightly` channel; a test passes a release tag and a nightly-tagged URL on a non-nightly item to prove they survive.
+- **Failures:** a failed scheduled run relies on GitHub's own failed-run email, as chosen. No issue is opened.
+
+## Things to know / tradeoffs
+- Releases and nightlies share one concurrency group. GitHub keeps only one waiting run per group, so two runs queued behind a running build could replace each other. Not a practical problem with one nightly a day and manual releases.
+- A nightly's version is based on the latest release tag (patch + 1), so after `v0.1.3` it is `0.1.4-<stamp>.<hash>`.
+- Not run on GitHub yet: the shared build for a release (refactored, so it needs a dry run), a nightly dry run, a real nightly, and a prune with more than 7 nightlies.
+
+## Status
+Implemented and unit-tested (rules N1–N10). The real runs are in the manual checklist in `docs/nightly-spec.md`.
+

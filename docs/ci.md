@@ -35,6 +35,12 @@ Actions › Variables:
 
 A manual run (Actions › CI › Run workflow) can override the runner and include the UI tests.
 
+## Releases and nightlies
+
+Both are manual-or-scheduled workflows that call one shared build (`build-and-publish.yml`):
+`release.yml` (manual) and `nightly.yml` (daily 03:00 UTC). See `docs/release.md`,
+`docs/release-spec.md` and `docs/nightly-spec.md`.
+
 ## Certificate expiry reminder
 
 A weekly workflow (`cert-expiry`) checks when the Developer ID certificate expires and opens a
