@@ -2,5 +2,16 @@
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
   <channel>
     <title>Lynx DeFeedback Host</title>
+    <item>
+      <title>Version 0.1.3-20261126010544.de17354</title>
+      <pubDate>Thu, 26 Nov 2026 01:07:47 GMT</pubDate>
+      <link>https://github.com/eklynx/LynxDeFeedbackHost/releases/tag/nightly-0.1.3-20261126010544.de17354</link>
+      <sparkle:channel>nightly</sparkle:channel>
+      <sparkle:version>20261126010544</sparkle:version>
+      <sparkle:shortVersionString>0.1.3-20261126010544.de17354</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>27.0</sparkle:minimumSystemVersion>
+      <sparkle:releaseNotesLink>https://github.com/eklynx/LynxDeFeedbackHost/releases/tag/nightly-0.1.3-20261126010544.de17354</sparkle:releaseNotesLink>
+      <enclosure url="https://github.com/eklynx/LynxDeFeedbackHost/releases/download/nightly-0.1.3-20261126010544.de17354/DeFeedbackHost-0.1.3-20261126010544.de17354.dmg" length="5652925" type="application/octet-stream" sparkle:edSignature="EW7WAr5KaSJ+Z6f2rUooW1HnqAD5g6Q3Gjr5jhbdRFhHtUEzz9tgHdAl8AhWy+jA5Gfkk7VPWfCE7ln8vtg0Cg=="/>
+    </item>
   </channel>
 </rss>
