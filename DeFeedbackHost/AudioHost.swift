@@ -15,84 +15,6 @@ import Synchronization
 import ServiceManagement
 import os
 
-enum AudioHostError: LocalizedError {
-    case pluginNotInstalled
-    case noDeviceSelected
-    case microphoneAccessDenied
-    case engineUnavailable
-    case halComponentUnavailable
-    case sampleRateUnavailable(String)
-    case sampleRateMismatch(input: Double, output: Double)
-    case sampleRateNotApplied(String, Double)
-    case bufferSizeNotApplied(String, requested: Int, actual: Int?)
-    case maxInstancesReached
-    case coreAudio(String, OSStatus)
-
-    var errorDescription: String? {
-        switch self {
-        case .pluginNotInstalled:
-            return String(
-                format: String(localized: locKeyErrPluginNotFoundFormat,
-                              table: locTableErrors),
-                PluginConfiguration.displayName)
-        case .noDeviceSelected:
-            return String(localized: locKeyErrNoDeviceSelected, table: locTableErrors)
-        case .microphoneAccessDenied:
-            return String(localized: locKeyErrMicrophoneAccessDenied, table: locTableErrors)
-        case .engineUnavailable:
-            return String(localized: locKeyErrEngineUnavailable, table: locTableErrors)
-        case .halComponentUnavailable:
-            return String(localized: locKeyErrHalComponentUnavailableFormat, table: locTableErrors)
-        case .sampleRateUnavailable(let name):
-            return String(
-                format: String(localized: locKeyErrSampleRateUnavailableFormat,
-                              table: locTableErrors),
-                name)
-        case .sampleRateMismatch(let input, let output):
-            return String(
-                format: String(localized: locKeyErrSampleRateMismatchErrFormat,
-                              table: locTableErrors),
-                input,
-                output
-            )
-        case .sampleRateNotApplied(let name, let rate):
-            return String(
-                format: String(localized: locKeyErrSampleRateNotAppliedFormat,
-                              table: locTableErrors),
-                name,
-                rate
-            )
-        case .bufferSizeNotApplied(let name, let requested, let actual):
-            if let actual {
-                return String(
-                    format: String(localized: locKeyErrBufferSizeNotAppliedFormatActualGiven,
-                                  table: locTableErrors),
-                    name,
-                    requested,
-                    actual
-                )
-            }
-            return String(
-                format: String(localized: locKeyErrBufferSizeNotAppliedFormatNoActualGiven,
-                              table: locTableErrors),
-                name,
-                requested
-            )
-        case .maxInstancesReached:
-            return String(
-                format: String(localized: locKeyErrMaxInstancesReachedFormat,
-                              table: locTableErrors),
-                PluginConfiguration.maximumInstanceCount)
-        case .coreAudio(let what, let status):
-            return String(
-                format: String(localized: locKeyErrCoreAudioErrFormat,
-                          table: locTableErrors),
-            status,
-            what)
-        }
-    }
-}
-
 /// Main manger for the host, managing the AUHAL audio devices,  the audio engine, and the plugin instances.
 ///
 /// The I/O layer uses the v2 AUHAL API due to limitations in `AVAudioEngine` and  `AUAudioUnit`
@@ -113,10 +35,13 @@ final class AudioHost {
          launchAgents: LaunchAgentControlling = LaunchAgentService(),
          supervision: LaunchSupervision = LaunchdSupervision()) {
         self.defaults = defaults
-        self.launchAgents = launchAgents
-        self.supervision = supervision
+        self.launch = LaunchAgentSettings(agents: launchAgents, supervision: supervision)
+        self.persistence = SettingsPersistence(defaults: defaults, changeFlag: changeFlag)
         self.isPluginInstalled = pluginInstalled ?? PluginConfiguration.isInstalled
         self.pluginAvailabilityOverride = pluginInstalled != nil
+
+        launch.onError = { [weak self] message in self?.errorMessage = message }
+        persistence.host = self
     }
 
     // MARK: - Plugin availability
@@ -485,70 +410,24 @@ final class AudioHost {
 
     // MARK: - Launch at login and crash restart
     //
-    // Two independent launchd agents back these settings; see Lifecycle/LaunchSupervision.swift.
+    // Two independent launchd agents back these settings; see `LaunchAgentSettings`.
 
-    @ObservationIgnored private let launchAgents: LaunchAgentControlling
-    @ObservationIgnored private let supervision: LaunchSupervision
-
-    private(set) var loginAgentStatus: SMAppService.Status = .notRegistered
-    private(set) var supervisorAgentStatus: SMAppService.Status = .notRegistered
+    @ObservationIgnored private let launch: LaunchAgentSettings
 
     var launchAtLogin: Bool {
-        get { Self.isOn(loginAgentStatus) }
-        set { setAgent(.login, enabled: newValue, name: "launch at login") }
+        get { launch.launchAtLogin }
+        set { launch.launchAtLogin = newValue }
     }
 
     var restartAfterCrash: Bool {
-        get { Self.isOn(supervisorAgentStatus) }
-        set { setAgent(.supervisor, enabled: newValue, name: "restart after crash") }
+        get { launch.restartAfterCrash }
+        set { launch.restartAfterCrash = newValue }
     }
 
-    /// Registered, but the user still has to allow it in System Settings › Login Items.
-    var launchPermissionsNeedApproval: Bool {
-        loginAgentStatus == .requiresApproval || supervisorAgentStatus == .requiresApproval
-    }
-
-    /// Restart-after-crash is on, but this process was started outside launchd (for example from
-    /// Finder before the setting was enabled), so a crash would not be restarted yet.
-    var needsRelaunchToBeSupervised: Bool {
-        supervisorAgentStatus == .enabled && !supervision.isRunningUnderSupervisor
-    }
-
-    /// Quits normally and asks launchd to start the supervised copy once we are gone.
-    func relaunchUnderSupervisor() {
-        guard supervision.handOff(afterDelay: 2) else {
-            errorMessage = "Couldn't ask the system to relaunch DeFeedbackHost — check Login Items in System Settings." // TODO: localize string
-            return
-        }
-        NSApp.terminate(nil)
-    }
-
-    func refreshLaunchAgentStatus() {
-        loginAgentStatus = launchAgents.status(of: .login)
-        supervisorAgentStatus = launchAgents.status(of: .supervisor)
-    }
-
-    private static func isOn(_ status: SMAppService.Status) -> Bool {
-        status == .enabled || status == .requiresApproval
-    }
-
-    private func setAgent(_ kind: LaunchAgentKind, enabled: Bool, name: String) {
-        var failure: Error?
-        do {
-            try launchAgents.setEnabled(enabled, for: kind)
-        } catch {
-            failure = error
-            Logger.host_application.error("Error changing \(name) agent: \(error)")
-        }
-
-        refreshLaunchAgentStatus()
-
-        let isNowOn = Self.isOn(kind == .login ? loginAgentStatus : supervisorAgentStatus)
-        if isNowOn != enabled {
-            let reason = failure?.localizedDescription ?? "the system kept the previous setting"
-            errorMessage = "Couldn't turn \(enabled ? "on" : "off") \(name) — \(reason)" // TODO: localize string
-        }
-    }
+    var launchPermissionsNeedApproval: Bool { launch.permissionsNeedApproval }
+    var needsRelaunchToBeSupervised: Bool { launch.needsRelaunchToBeSupervised }
+    func relaunchUnderSupervisor() { launch.relaunchUnderSupervisor() }
+    func refreshLaunchAgentStatus() { launch.refreshStatus() }
 
     // MARK: - Startup and new-instance defaults
 
@@ -685,13 +564,8 @@ final class AudioHost {
     /// flag that marks a settings change event.
     @ObservationIgnored let changeFlag = SettingsChangeFlag()
 
-    /// Dont try to save settings while `prepare()` is still working so we don't put things in a half-way done state
-    @ObservationIgnored private var isRestoring = true
-
-    @ObservationIgnored private var settingsAreDirty = false
-    @ObservationIgnored private var lastSavedSettings: HostSettings?
-    @ObservationIgnored private var autosaveTask: Task<Void, Never>?
-    @ObservationIgnored private var appTerminationObserver: NSObjectProtocol?
+    /// Saves, autosaves and watches `defaults write` edits; see `SettingsPersistence`.
+    @ObservationIgnored private let persistence: SettingsPersistence
 
     // MARK: - Load State
 
@@ -708,11 +582,7 @@ final class AudioHost {
         restoreAudioDevicesState(from: settings)
         await restoreInstances(from: settings)
 
-        isRestoring = false
-        lastSavedSettings = settings
-        watchExternalPreferenceChanges()
-        startAutosaveTask()
-        saveOnTermination()
+        persistence.finishRestoring(with: settings)
 
         await autoRunIfRequested()
     }
@@ -820,92 +690,14 @@ final class AudioHost {
 
     // MARK: - Save Settings
 
-    // MARK: - External preference changes (defaults write)
+    /// Applies edits made to the individual preference keys (for example `defaults write`).
+    func applyExternalPreferences() { persistence.applyExternalPreferences() }
 
-    @ObservationIgnored private var defaultsObserver: NSObjectProtocol?
+    private func settingsChanged() { persistence.markDirty() }
 
-    private func watchExternalPreferenceChanges() {
-        defaultsObserver = NotificationCenter.default.addObserver(
-            forName: UserDefaults.didChangeNotification,
-            object: defaults,
-            queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.applyExternalPreferences() }
-        }
-    }
+    func saveSettings() { persistence.save() }
 
-    /// Applies edits made to the individual preference keys (for example `defaults write`) to the
-    /// running host. Buffer size and parallel rendering are locked while running, so those wait and
-    /// are re-checked when the host stops. Invalid values are ignored.
-    func applyExternalPreferences() {
-        guard !isRestoring else { return }
-
-        let current = currentSettings().preferences
-        let external = HostPreferences.read(from: defaults, fallback: current)
-        guard external != current else { return }
-
-        var applied = lastSavedSettings?.preferences ?? current
-
-        if external.autoRunOnStartup != autoRunOnStartup { autoRunOnStartup = external.autoRunOnStartup }
-        if external.newInstancesStartMuted != newInstancesMuted { newInstancesMuted = external.newInstancesStartMuted }
-        if external.newInstancesStartBypassed != newInstancesBypassed { newInstancesBypassed = external.newInstancesStartBypassed }
-        applied.autoRunOnStartup = external.autoRunOnStartup
-        applied.newInstancesStartMuted = external.newInstancesStartMuted
-        applied.newInstancesStartBypassed = external.newInstancesStartBypassed
-
-        if !isRunning {
-            if external.parallelRendering != parallelRendering { parallelRendering = external.parallelRendering }
-            if external.bufferSize != bufferSize { bufferSize = external.bufferSize }
-            applied.parallelRendering = external.parallelRendering
-            applied.bufferSize = external.bufferSize
-        }
-
-        // What the defaults now hold counts as saved, so the next save doesn't rewrite it.
-        lastSavedSettings?.preferences = applied
-    }
-
-    private func settingsChanged() {
-        guard !isRestoring else { return }
-        settingsAreDirty = true
-    }
-
-    /// check for settings to save every second.
-    private func startAutosaveTask() {
-        autosaveTask?.cancel()
-        autosaveTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
-                guard let self else { return }
-                self.saveIfNeeded()
-            }
-        }
-    }
-
-    private func saveIfNeeded() {
-        let instancesAreDirty = changeFlag.consume()
-
-        if instancesAreDirty {
-            for instance in instances {
-                instance.reconcileMuteFromPlugin()
-            }
-        }
-
-        guard settingsAreDirty || instancesAreDirty else { return }
-        saveSettings()
-    }
-
-    func saveSettings() {
-        guard !isRestoring else { return }
-
-        let settings = currentSettings()
-        settingsAreDirty = false
-
-        guard settings != lastSavedSettings else { return }
-
-        SettingsStore.save(settings, previous: lastSavedSettings, to: defaults)
-        lastSavedSettings = settings
-    }
-
-    private func currentSettings() -> HostSettings {
+    func currentSettings() -> HostSettings {
         HostSettings(
             pluginIdentity: .configured,
             bufferSize: bufferSize,
@@ -933,15 +725,20 @@ final class AudioHost {
             webServer: webServerSettings)
     }
 
-    private func saveOnTermination() {
-        appTerminationObserver = NotificationCenter.default.addObserver(
-            forName: NSApplication.willTerminateNotification,
-            object: nil,
-            queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.settingsAreDirty = true
-                self?.saveSettings()
-            }
+    /// Applies preferences read from outside the app. Buffer size and parallel rendering are
+    /// locked while running, so `includingLockedWhileRunning` is false then and those wait.
+    func apply(_ external: HostPreferences, includingLockedWhileRunning: Bool) {
+        if external.autoRunOnStartup != autoRunOnStartup { autoRunOnStartup = external.autoRunOnStartup }
+        if external.newInstancesStartMuted != newInstancesMuted { newInstancesMuted = external.newInstancesStartMuted }
+        if external.newInstancesStartBypassed != newInstancesBypassed { newInstancesBypassed = external.newInstancesStartBypassed }
+        guard includingLockedWhileRunning else { return }
+        if external.parallelRendering != parallelRendering { parallelRendering = external.parallelRendering }
+        if external.bufferSize != bufferSize { bufferSize = external.bufferSize }
+    }
+
+    func reconcileInstancesFromPlugin() {
+        for instance in instances {
+            instance.reconcileMuteFromPlugin()
         }
     }
 
@@ -1037,8 +834,7 @@ final class AudioHost {
         applyExternalPreferences()
 
         // natural save state point
-        settingsAreDirty = true
-        saveSettings()
+        persistence.saveNow()
     }
 
     private func startAudio() async throws {
@@ -1311,36 +1107,7 @@ final class AudioHost {
 
     // MARK: - Diagnostics
 
-    struct Diagnostics {
-        let captureCycles: UInt64
-        let renderCycles: UInt64
-        let underruns: UInt64
-
-        /// dsp load is fraction of buffer that is used.  when this maxes we get audio glitches.
-        let dspLoad: Double
-        let peakDspLoad: Double
-
-        let renderThreadPolicy: RealtimeThreadPolicy?
-        let captureThreadPolicy: RealtimeThreadPolicy?
-
-        /// The worker threads. Empty unless parallel rendering is on.
-        let workerThreadPolicies: [RealtimeThreadPolicy]
-
-        /// Whether paralell rendering is actually happening, as opposed to being permitted to but
-        /// sitting under the instance threshold.
-        let parallelRenderingEngaged: Bool
-
-        var hasRendered: Bool { renderCycles > 0 }
-
-        /// Checks if all rendering threads are set to realtime priority
-        var audioThreadsAreRealtime: Bool {
-            for policy in [renderThreadPolicy, captureThreadPolicy] {
-                guard let policy else { continue }
-                if !policy.isRealtime { return false }
-            }
-            return workerThreadPolicies.allSatisfy(\.isRealtime)
-        }
-    }
+    typealias Diagnostics = EngineDiagnostics
 
     /// Non-zero cycle counts are the difference between "the units started" and "audio is
     /// actually moving". Underruns are the audible symptom of two devices drifting apart.

@@ -328,3 +328,33 @@ DeFeedbackHost/
 
 ## Status
 Baseline: 9 -> 5 findings. Left: AudioHost (4), AudioIO (1).
+
+# Lint cleanup: AudioHost split, step C1 (issue #41, PR C1)
+
+AudioHost is being split in four stacked PRs (launch agents + persistence, instance list, engine session, device selection). `AudioHost` keeps its whole public API as a facade; logic moves into owned collaborators.
+
+## What I changed in C1
+```text
+DeFeedbackHost/
+├── AudioHost.swift                       forwards to the two collaborators below
+└── Host/
+    ├── AudioHostError.swift              moved as is
+    ├── EngineDiagnostics.swift           was AudioHost.Diagnostics (`typealias Diagnostics = EngineDiagnostics` keeps the name)
+    ├── LaunchAgents/LaunchAgentSettings.swift   login + supervisor agent settings, errors via `onError`
+    └── Persistence/SettingsPersistence.swift    dirty flag, autosave, save-on-quit, `defaults write` handling,
+                                                 behind a documented `PersistableHost` protocol
+```
+- `AudioHost.init` gained two defaulted parameters (`launchAgents`, `supervision`) so launch-agent behaviour can be tested with fakes. Defaults are the real implementations.
+- `currentSettings()` is now internal (was private) because `SettingsPersistence` asks the host for it through `PersistableHost`.
+- External-preference handling is split: the diff and "counts as saved" bookkeeping live in `SettingsPersistence`; the five `if external != current` assignments live in `AudioHost.apply(_:includingLockedWhileRunning:)`.
+
+## How I kept behaviour the same
+- First wrote `HostPersistenceCharacterizationTests` (15 tests: no save while restoring, no write when nothing changed, external edits ignored/applied/counted as saved, every launch-agent message and status path) and ran them on the OLD code. One of my first guesses was wrong (the very first save after startup does write, because first-run device selection changes the settings); I fixed the test to say that. All pass before and after.
+- Full `DeFeedbackHostTests` is green.
+
+## Things to know
+- **The baseline entries for AudioHost remain**, with smaller numbers: class body 910 -> 800 lines, file 1370 -> 1144. The file-length limit needs the instance-list PR; the class-body limit needs all four. After C1-C3 I expect to still be roughly 70 counted lines over, so C4 will also move `startBlockedReason` and the restore helpers.
+- `AudioHost.Diagnostics` is now a typealias of `EngineDiagnostics`; every existing use compiles unchanged.
+
+## Status
+Baseline entries unchanged in number (5); AudioHost's numbers shrank. Next: C2 instance list.
