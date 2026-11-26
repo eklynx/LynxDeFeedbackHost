@@ -74,3 +74,26 @@ enum LoadReadout {
         return "\(Int((fraction * 100).rounded()))%"
     }
 }
+
+/// Sample rate and load, refreshed twice a second while the engine runs.
+struct StatusReadout: View {
+
+    let host: AudioHost
+
+    var body: some View {
+        if host.isRunning {
+            TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+                let diagnostics = host.diagnostics
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("\(Int(host.runningSampleRate)) Hz")
+                    Text(LoadReadout.summary(diagnostics))
+                        .foregroundStyle(LoadReadout.color(diagnostics))
+                }
+                .font(.caption)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .help(LoadReadout.help(diagnostics, parallelRendering: host.parallelRendering))
+            }
+        }
+    }
+}

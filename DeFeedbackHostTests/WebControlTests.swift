@@ -549,36 +549,36 @@ struct InstanceStrengthTests {
     /// Scaling from the parameter's own range has to give the same answer either way.
     @Test func normalisesFromEitherConvention() {
         // 0…1
-        #expect(PluginInstance.percentFromAUValue(of: 0, from: 0, span: 1) == 0)
-        #expect(PluginInstance.percentFromAUValue(of: 0.5, from: 0, span: 1) == 50)
-        #expect(PluginInstance.percentFromAUValue(of: 1, from: 0, span: 1) == 100)
+        #expect(WatchedParameter.percentFromAUValue(of: 0, from: 0, span: 1) == 0)
+        #expect(WatchedParameter.percentFromAUValue(of: 0.5, from: 0, span: 1) == 50)
+        #expect(WatchedParameter.percentFromAUValue(of: 1, from: 0, span: 1) == 100)
 
         // 0…100
-        #expect(PluginInstance.percentFromAUValue(of: 0, from: 0, span: 100) == 0)
-        #expect(PluginInstance.percentFromAUValue(of: 37, from: 0, span: 100) == 37)
-        #expect(PluginInstance.percentFromAUValue(of: 100, from: 0, span: 100) == 100)
+        #expect(WatchedParameter.percentFromAUValue(of: 0, from: 0, span: 100) == 0)
+        #expect(WatchedParameter.percentFromAUValue(of: 37, from: 0, span: 100) == 37)
+        #expect(WatchedParameter.percentFromAUValue(of: 100, from: 0, span: 100) == 100)
     }
 
     /// The page shows whole numbers, per the spec for this control.
     @Test func roundsToAWholePercent() {
-        #expect(PluginInstance.percentFromAUValue(of: 0.333, from: 0, span: 1) == 33)
-        #expect(PluginInstance.percentFromAUValue(of: 0.335, from: 0, span: 1) == 34)
-        #expect(PluginInstance.percentFromAUValue(of: 0.999, from: 0, span: 1) == 100)
+        #expect(WatchedParameter.percentFromAUValue(of: 0.333, from: 0, span: 1) == 33)
+        #expect(WatchedParameter.percentFromAUValue(of: 0.335, from: 0, span: 1) == 34)
+        #expect(WatchedParameter.percentFromAUValue(of: 0.999, from: 0, span: 1) == 100)
     }
 
     /// A range that doesn't start at zero still has to map onto 0–100.
     @Test func handlesAnOffsetRange() {
-        #expect(PluginInstance.percentFromAUValue(of: -6, from: -6, span: 12) == 0)
-        #expect(PluginInstance.percentFromAUValue(of: 0, from: -6, span: 12) == 50)
-        #expect(PluginInstance.percentFromAUValue(of: 6, from: -6, span: 12) == 100)
+        #expect(WatchedParameter.percentFromAUValue(of: -6, from: -6, span: 12) == 0)
+        #expect(WatchedParameter.percentFromAUValue(of: 0, from: -6, span: 12) == 50)
+        #expect(WatchedParameter.percentFromAUValue(of: 6, from: -6, span: 12) == 100)
     }
 
     /// A degenerate or out-of-range value must not produce a slider position that can't exist.
     /// This runs on the parameter observer's thread, where there is nothing to catch a trap.
     @Test func clampsAndSurvivesADegenerateRange() {
-        #expect(PluginInstance.percentFromAUValue(of: 5, from: 0, span: 0) == 0)
-        #expect(PluginInstance.percentFromAUValue(of: -1, from: 0, span: 1) == 0)
-        #expect(PluginInstance.percentFromAUValue(of: 2, from: 0, span: 1) == 100)
+        #expect(WatchedParameter.percentFromAUValue(of: 5, from: 0, span: 0) == 0)
+        #expect(WatchedParameter.percentFromAUValue(of: -1, from: 0, span: 1) == 0)
+        #expect(WatchedParameter.percentFromAUValue(of: 2, from: 0, span: 1) == 100)
     }
 }
 
@@ -588,27 +588,27 @@ struct InstanceStrengthWritingTests {
 
     @Test func mapsAPercentageOntoEitherConvention() {
         // 0…1
-        #expect(PluginInstance.auValueFromPercent(forPercent: 0, from: 0, span: 1) == 0)
-        #expect(PluginInstance.auValueFromPercent(forPercent: 50, from: 0, span: 1) == 0.5)
-        #expect(PluginInstance.auValueFromPercent(forPercent: 100, from: 0, span: 1) == 1)
+        #expect(WatchedParameter.auValueFromPercent(forPercent: 0, from: 0, span: 1) == 0)
+        #expect(WatchedParameter.auValueFromPercent(forPercent: 50, from: 0, span: 1) == 0.5)
+        #expect(WatchedParameter.auValueFromPercent(forPercent: 100, from: 0, span: 1) == 1)
 
         // 0…100
-        #expect(PluginInstance.auValueFromPercent(forPercent: 37, from: 0, span: 100) == 37)
-        #expect(PluginInstance.auValueFromPercent(forPercent: 100, from: 0, span: 100) == 100)
+        #expect(WatchedParameter.auValueFromPercent(forPercent: 37, from: 0, span: 100) == 37)
+        #expect(WatchedParameter.auValueFromPercent(forPercent: 100, from: 0, span: 100) == 100)
     }
 
     @Test func handlesAnOffsetRange() {
-        #expect(PluginInstance.auValueFromPercent(forPercent: 0, from: -6, span: 12) == -6)
-        #expect(PluginInstance.auValueFromPercent(forPercent: 50, from: -6, span: 12) == 0)
-        #expect(PluginInstance.auValueFromPercent(forPercent: 100, from: -6, span: 12) == 6)
+        #expect(WatchedParameter.auValueFromPercent(forPercent: 0, from: -6, span: 12) == -6)
+        #expect(WatchedParameter.auValueFromPercent(forPercent: 50, from: -6, span: 12) == 0)
+        #expect(WatchedParameter.auValueFromPercent(forPercent: 100, from: -6, span: 12) == 6)
     }
 
     /// The route rejects anything outside 0–100 before it gets here, so this is the second line:
     /// nothing outside the plugin's own range may reach the plugin.
     @Test func clampsOutOfRangePercentages() {
-        #expect(PluginInstance.auValueFromPercent(forPercent: -20, from: 0, span: 1) == 0)
-        #expect(PluginInstance.auValueFromPercent(forPercent: 150, from: 0, span: 1) == 1)
-        #expect(PluginInstance.auValueFromPercent(forPercent: 150, from: -6, span: 12) == 6)
+        #expect(WatchedParameter.auValueFromPercent(forPercent: -20, from: 0, span: 1) == 0)
+        #expect(WatchedParameter.auValueFromPercent(forPercent: 150, from: 0, span: 1) == 1)
+        #expect(WatchedParameter.auValueFromPercent(forPercent: 150, from: -6, span: 12) == 6)
     }
 
     /// The pair has to be a genuine round trip in `Float` precision, not just in principle. If a
@@ -618,8 +618,8 @@ struct InstanceStrengthWritingTests {
     func roundTripsThroughTheReadingSide(percent: Int) {
         let ranges: [(AUValue, AUValue)] = [(0, 1), (0, 100), (-6, 12), (20, 80), (0, 3)]
         for (lowest, span) in ranges {
-            let value = PluginInstance.auValueFromPercent(forPercent: percent, from: lowest, span: span)
-            let readBack = PluginInstance.percentFromAUValue(of: value, from: lowest, span: span)
+            let value = WatchedParameter.auValueFromPercent(forPercent: percent, from: lowest, span: span)
+            let readBack = WatchedParameter.percentFromAUValue(of: value, from: lowest, span: span)
             #expect(readBack == percent,
                     "\(percent)% over \(lowest)…\(lowest + span) came back as \(readBack)%")
         }
@@ -746,7 +746,7 @@ struct InstanceStrengthWriteThroughTests {
             let snapshot = instance.strengthPercent
             #expect(snapshot == wanted,
                     "wrote \(wanted)%, snapshot says \(String(describing: snapshot))%")
-            #expect(parameter.value == PluginInstance.auValueFromPercent(forPercent: wanted,
+            #expect(parameter.value == WatchedParameter.auValueFromPercent(forPercent: wanted,
                                                             from: parameter.minValue,
                                                             span: span),
                     "the plugin's own parameter didn't take \(wanted)%")
