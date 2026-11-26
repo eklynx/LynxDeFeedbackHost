@@ -1,6 +1,7 @@
 # Release workflow: spec
 
-Source of truth in code: `.github/workflows/release.yml`, `scripts/create-dmg.sh`,
+Source of truth in code: `.github/workflows/release.yml` (the manual trigger) and the shared
+`.github/workflows/build-and-publish.yml` (the steps, also used by the nightly: `docs/nightly-spec.md`), `scripts/create-dmg.sh`,
 `scripts/notarytool-submit.sh`, `scripts/ci/import-signing-cert.sh`, `scripts/ci/verify-release.sh`,
 `scripts/publish-update.sh`. Tests: `DeFeedbackHostTests/ReleaseScriptTests.swift`. Origin: issue #3
 (delivered in several PRs). Setup and how to run: `docs/release.md`. Version numbers: `docs/versioning-spec.md`.

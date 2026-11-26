@@ -1,0 +1,222 @@
+name: Build and publish
+
+# The shared build for releases and nightlies: guard, unit tests, version from git tags, archive,
+# Developer ID sign, notarize, DMG, verify, then (unless a dry run) the GitHub Release and the
+# Sparkle appcast item. Called by release.yml (manual) and nightly.yml (daily); it never runs on its
+# own. Setup (the `release` environment and its secrets): docs/release.md. Rules: docs/release-spec.md
+# and docs/nightly-spec.md.
+on:
+  workflow_call:
+    inputs:
+      kind:
+        description: 'release (vX.Y.Z, release channel) or nightly (nightly-<version>, nightly channel)'
+        type: string
+        required: true
+      bump:
+        description: 'Which part of the version to bump (release only)'
+        type: string
+        default: patch
+      dry_run:
+        description: 'Build, sign and notarize, but publish nothing (no tag, Release or appcast). The DMG is attached to the run.'
+        type: boolean
+        default: false
+    outputs:
+      tag:
+        description: The tag of the build
+        value: ${{ jobs.publish.outputs.tag }}
+      full_version:
+        description: The full version of the build
+        value: ${{ jobs.publish.outputs.full_version }}
+
+permissions:
+  contents: read
+
+jobs:
+  guard-and-test:
+    name: Guard and unit tests
+    runs-on: ${{ fromJSON(vars.RUNNER_LABEL || '"xcode-27"') }}
+    timeout-minutes: 30
+    steps:
+      - name: Only from main
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Builds are published from main only (this run is on $GITHUB_REF)."
+            exit 1
+          fi
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # the version script needs the tags
+      - name: Compute the version and refuse an existing tag
+        env:
+          VERSION_KIND: ${{ inputs.kind }}
+          VERSION_BUMP: ${{ inputs.bump }}
+        run: |
+          sh scripts/compute-version.sh | tee "$RUNNER_TEMP/version.txt"
+          TAG="$(sed -n 's/^tag=//p' "$RUNNER_TEMP/version.txt")"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "::error::Tag $TAG already exists."
+            exit 1
+          fi
+      - name: Unit tests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project DeFeedbackHost.xcodeproj \
+            -scheme DeFeedbackHost \
+            -destination 'platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            -resultBundlePath "$RUNNER_TEMP/TestResults.xcresult" \
+            -only-testing:DeFeedbackHostTests \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY=""
+      - name: Upload results
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-test-results
+          path: ${{ runner.temp }}/TestResults.xcresult
+
+  publish:
+    name: Build, notarize and publish
+    needs: guard-and-test
+    runs-on: ${{ fromJSON(vars.RUNNER_LABEL || '"xcode-27"') }}
+    timeout-minutes: 60
+    # The signing and notary secrets live in this environment, which is limited to main.
+    environment: release
+    permissions:
+      contents: write   # tag + GitHub Release, and the gh-pages push
+    env:
+      GH_TOKEN: ${{ github.token }}
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      full_version: ${{ steps.version.outputs.full_version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Compute the version
+        id: version
+        env:
+          VERSION_KIND: ${{ inputs.kind }}
+          VERSION_BUMP: ${{ inputs.bump }}
+        run: sh scripts/compute-version.sh --github-output
+
+      - name: Build the Stream Deck plugin tools
+        run: |
+          npm install -g @elgato/cli
+          cd streamdeck
+          npm ci
+          npm run build
+
+      - name: Import the signing certificate
+        env:
+          CERT_P12_BASE64: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+        run: sh scripts/ci/import-signing-cert.sh import
+
+      - name: Write the notary key
+        env:
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          umask 077
+          printf '%s' "$NOTARY_KEY_P8" > "$RUNNER_TEMP/notary-key.p8"
+          {
+            echo "NOTARY_KEY_PATH=$RUNNER_TEMP/notary-key.p8"
+            echo "NOTARY_KEY_ID=$NOTARY_KEY_ID"
+            echo "NOTARY_ISSUER_ID=$NOTARY_ISSUER_ID"
+          } >> "$GITHUB_ENV"
+
+      # The archive's install-only run-script phases sign with Developer ID, build the DMG and
+      # notarize it (scripts/create-dmg.sh, scripts/notarytool-submit.sh). The app itself is built
+      # unsigned here: those phases sign the copy that goes into the DMG.
+      - name: Archive, sign and notarize
+        env:
+          MARKETING: ${{ steps.version.outputs.marketing_version }}
+          BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
+          # The DMG is named with the full version (a nightly: 0.1.4-<stamp>.<hash>).
+          DMG_VERSION: ${{ steps.version.outputs.full_version }}
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project DeFeedbackHost.xcodeproj \
+            -scheme DeFeedbackHost \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -archivePath "$RUNNER_TEMP/DeFeedbackHost.xcarchive" \
+            -derivedDataPath "$RUNNER_TEMP/derived" \
+            MARKETING_VERSION="$MARKETING" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY=""
+
+      - name: Verify the DMG
+        id: dmg
+        env:
+          MARKETING: ${{ steps.version.outputs.marketing_version }}
+          BUILD: ${{ steps.version.outputs.build_number }}
+          FULL: ${{ steps.version.outputs.full_version }}
+        run: |
+          DMG="build/DeFeedbackHost-$FULL.dmg"
+          test -f "$DMG" || { echo "::error::$DMG was not produced"; exit 1; }
+          sh scripts/ci/verify-release.sh "$DMG" "$MARKETING" "$BUILD"
+          echo "path=$DMG" >> "$GITHUB_OUTPUT"
+
+      - name: Keep the DMG with the run (dry run)
+        if: ${{ inputs.dry_run }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: DeFeedbackHost-${{ steps.version.outputs.full_version }}
+          path: ${{ steps.dmg.outputs.path }}
+          retention-days: 7
+
+      # Everything below publishes, so none of it runs for a dry run.
+      - name: Check out the appcast branch
+        if: ${{ !inputs.dry_run }}
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: site
+
+      - name: Create the release and the appcast item
+        if: ${{ !inputs.dry_run }}
+        env:
+          VERSION: ${{ steps.version.outputs.full_version }}
+          BUILD: ${{ steps.version.outputs.build_number }}
+          DMG: ${{ steps.dmg.outputs.path }}
+          KIND: ${{ inputs.kind }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          RELEASE_TARGET: ${{ github.sha }}
+        run: |
+          export SPARKLE_BIN="$RUNNER_TEMP/derived/SourcePackages/artifacts/sparkle/Sparkle/bin"
+          # A nightly is a GitHub pre-release with a fixed note; a release gets generated notes.
+          if [ "$KIND" = "nightly" ]; then
+            export RELEASE_NOTES="Automatic nightly build of main at ${RELEASE_TARGET}. Not a release."
+          fi
+          sh scripts/publish-update.sh \
+            --dmg "$DMG" --version "$VERSION" --build "$BUILD" \
+            --channel "$KIND" --site-dir site --upload
+
+      - name: Publish the appcast
+        if: ${{ !inputs.dry_run }}
+        env:
+          VERSION: ${{ steps.version.outputs.full_version }}
+          KIND: ${{ inputs.kind }}
+        run: |
+          cd site
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add appcast.xml
+          git commit -m "Add $KIND $VERSION to the appcast"
+          for attempt in 1 2 3; do
+            git pull --rebase origin gh-pages && git push origin HEAD:gh-pages && exit 0
+            echo "push failed (attempt $attempt); retrying"
+            sleep $((attempt * 5))
+          done
+          echo "::error::Could not push the appcast. The GitHub Release exists; see docs/release.md (recovery)."
+          exit 1
+
+      - name: Remove the signing material
+        if: always()
+        run: |
+          sh scripts/ci/import-signing-cert.sh cleanup || true
+          rm -f "$RUNNER_TEMP/notary-key.p8"

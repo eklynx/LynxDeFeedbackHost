@@ -31,6 +31,13 @@ Workflow: `.github/workflows/release.yml` (Actions › **Release** › Run workf
   publish, and attaches the DMG to the run so you can try it.
 - The version is computed from git tags (`docs/versioning-spec.md`); you never type one.
 
+## Nightly builds
+
+A nightly is built every night at 03:00 UTC when `main` has changed (Actions › **Nightly**, which can
+also be run by hand). It is published as a GitHub pre-release and to the **Nightly** update channel,
+and only the newest 7 are kept. Rules, the manual checklist and recovery: `docs/nightly-spec.md`.
+It uses the same `release` environment and secrets as a release.
+
 ## Renewing the certificate
 
 The `cert-expiry` workflow opens an issue when the certificate is close to expiry. The renewal steps

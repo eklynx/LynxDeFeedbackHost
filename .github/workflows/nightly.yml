@@ -1,0 +1,129 @@
+name: Nightly
+
+# Every night (03:00 UTC), and by hand: if main has new commits since the last nightly or release,
+# build, sign and notarize a nightly and publish it to the Nightly update channel (a GitHub
+# pre-release plus an appcast item on the `nightly` channel), then keep only the newest 7 nightlies.
+# The build itself is build-and-publish.yml, shared with the release. Rules: docs/nightly-spec.md.
+# A failed scheduled run is reported by GitHub's own failed-run email.
+on:
+  schedule:
+    - cron: "0 3 * * *"   # every day, 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Build even if main has not changed since the last nightly or release'
+        type: boolean
+        default: false
+      dry_run:
+        description: 'Build, sign and notarize, but publish and prune nothing. The DMG is attached to the run.'
+        type: boolean
+        default: false
+      keep:
+        description: 'How many nightlies to keep'
+        type: string
+        default: "7"
+
+# One build at a time: nightlies and releases share the group (both push gh-pages).
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  decide:
+    name: Has main changed?
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      build: ${{ steps.decision.outputs.build }}
+    steps:
+      - name: Only from main
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Nightlies are built from main only (this run is on $GITHUB_REF)."
+            exit 1
+          fi
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # the tags tell what the last nightly and release were
+      - name: Decide
+        id: decision
+        env:
+          FORCE: ${{ inputs.force }}
+        run: |
+          sh scripts/ci/should-build-nightly.sh --github-output | tee "$RUNNER_TEMP/decision.txt"
+          { echo "### Nightly"; sed -n 's/^reason=/- /p;s/^build=/- build: /p' "$RUNNER_TEMP/decision.txt"; } >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: Build the nightly
+    needs: decide
+    if: ${{ needs.decide.outputs.build == 'true' }}
+    permissions:
+      contents: write   # the called workflow tags, publishes and pushes gh-pages
+    uses: ./.github/workflows/build-and-publish.yml
+    with:
+      kind: nightly
+      dry_run: ${{ inputs.dry_run || false }}
+
+  prune:
+    name: Keep only the newest nightlies
+    needs: build
+    if: ${{ needs.build.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write   # push gh-pages, delete old releases and tags
+    env:
+      GH_TOKEN: ${{ github.token }}
+      KEEP: ${{ inputs.keep || '7' }}
+      DRY_RUN: ${{ inputs.dry_run || false }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Pick the nightlies to remove
+        run: |
+          gh release list --limit 200 --json tagName,createdAt --jq '.[]|[.tagName,.createdAt]|@tsv' \
+            | sh scripts/ci/prune-nightlies.sh select --keep "$KEEP" > "$RUNNER_TEMP/old-nightlies.txt"
+          if [ -s "$RUNNER_TEMP/old-nightlies.txt" ]; then
+            echo "Nightlies beyond the newest $KEEP:"; cat "$RUNNER_TEMP/old-nightlies.txt"
+          else
+            echo "Nothing to prune: no more than $KEEP nightlies."
+          fi
+          if [ "$DRY_RUN" = "true" ]; then echo "Dry run: nothing is removed."; fi
+
+      # Feed first, releases second: the appcast must never point at a deleted download.
+      - name: Check out the appcast branch
+        if: ${{ !inputs.dry_run }}
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: site
+
+      - name: Remove them from the appcast
+        if: ${{ !inputs.dry_run }}
+        run: |
+          [ -s "$RUNNER_TEMP/old-nightlies.txt" ] || exit 0
+          sh scripts/ci/prune-nightlies.sh feed site/appcast.xml $(cat "$RUNNER_TEMP/old-nightlies.txt")
+          cd site
+          git diff --quiet appcast.xml && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add appcast.xml
+          git commit -m "Prune old nightlies from the appcast"
+          for attempt in 1 2 3; do
+            git pull --rebase origin gh-pages && git push origin HEAD:gh-pages && exit 0
+            echo "push failed (attempt $attempt); retrying"
+            sleep $((attempt * 5))
+          done
+          echo "::error::Could not push the pruned appcast; no release was deleted."
+          exit 1
+
+      - name: Delete the old nightly releases and their tags
+        if: ${{ !inputs.dry_run }}
+        run: |
+          [ -s "$RUNNER_TEMP/old-nightlies.txt" ] || exit 0
+          while read -r tag; do
+            echo "Deleting $tag"
+            gh release delete "$tag" --cleanup-tag --yes
+          done < "$RUNNER_TEMP/old-nightlies.txt"
