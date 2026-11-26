@@ -73,59 +73,10 @@ jobs:
     name: Keep only the newest nightlies
     needs: build
     if: ${{ needs.build.result == 'success' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
     permissions:
-      contents: write   # push gh-pages, delete old releases and tags
-    env:
-      GH_TOKEN: ${{ github.token }}
-      KEEP: ${{ inputs.keep || '7' }}
-      DRY_RUN: ${{ inputs.dry_run || false }}
-    steps:
-      - uses: actions/checkout@v7
-      - name: Pick the nightlies to remove
-        run: |
-          gh release list --limit 200 --json tagName,createdAt --jq '.[]|[.tagName,.createdAt]|@tsv' \
-            | sh scripts/ci/prune-nightlies.sh select --keep "$KEEP" > "$RUNNER_TEMP/old-nightlies.txt"
-          if [ -s "$RUNNER_TEMP/old-nightlies.txt" ]; then
-            echo "Nightlies beyond the newest $KEEP:"; cat "$RUNNER_TEMP/old-nightlies.txt"
-          else
-            echo "Nothing to prune: no more than $KEEP nightlies."
-          fi
-          if [ "$DRY_RUN" = "true" ]; then echo "Dry run: nothing is removed."; fi
-
-      # Feed first, releases second: the appcast must never point at a deleted download.
-      - name: Check out the appcast branch
-        if: ${{ !inputs.dry_run }}
-        uses: actions/checkout@v7
-        with:
-          ref: gh-pages
-          path: site
-
-      - name: Remove them from the appcast
-        if: ${{ !inputs.dry_run }}
-        run: |
-          [ -s "$RUNNER_TEMP/old-nightlies.txt" ] || exit 0
-          sh scripts/ci/prune-nightlies.sh feed site/appcast.xml $(cat "$RUNNER_TEMP/old-nightlies.txt")
-          cd site
-          git diff --quiet appcast.xml && exit 0
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add appcast.xml
-          git commit -m "Prune old nightlies from the appcast"
-          for attempt in 1 2 3; do
-            git pull --rebase origin gh-pages && git push origin HEAD:gh-pages && exit 0
-            echo "push failed (attempt $attempt); retrying"
-            sleep $((attempt * 5))
-          done
-          echo "::error::Could not push the pruned appcast; no release was deleted."
-          exit 1
-
-      - name: Delete the old nightly releases and their tags
-        if: ${{ !inputs.dry_run }}
-        run: |
-          [ -s "$RUNNER_TEMP/old-nightlies.txt" ] || exit 0
-          while read -r tag; do
-            echo "Deleting $tag"
-            gh release delete "$tag" --cleanup-tag --yes
-          done < "$RUNNER_TEMP/old-nightlies.txt"
+      contents: write   # the called workflow pushes gh-pages and deletes old releases and tags
+    uses: ./.github/workflows/prune-builds.yml
+    with:
+      kind: nightly
+      keep: ${{ inputs.keep || '7' }}
+      dry_run: ${{ inputs.dry_run || false }}

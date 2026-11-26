@@ -1,0 +1,59 @@
+name: Pre-release
+
+# Manual pre-release: a build we start by hand with features or fixes that are not tested enough for a
+# full release. Version X.Y.Z-<label>.<N> (the release it leads to, then beta.1, beta.2, ...), tag
+# vX.Y.Z-<label>.<N>, published as a GitHub pre-release and to the Pre-release update channel; the
+# newest 10 are kept. The build is build-and-publish.yml, shared with the release and the nightly.
+# Rules: docs/prerelease-spec.md. Setup (the `release` environment and its secrets): docs/release.md.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Which release this leads to (patch, minor or major above the latest release)'
+        type: choice
+        options: [patch, minor, major]
+        default: minor
+      label:
+        description: 'Pre-release label, lowercase letters (beta, rc, ...)'
+        type: string
+        default: beta
+      dry_run:
+        description: 'Build, sign and notarize, but publish and prune nothing. The DMG is attached to the run.'
+        type: boolean
+        default: false
+      keep:
+        description: 'How many pre-releases to keep'
+        type: string
+        default: "10"
+
+# One build at a time (releases, nightlies and pre-releases share the group), never cancelled half way.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build the pre-release
+    permissions:
+      contents: write   # the called workflow tags, publishes and pushes gh-pages
+    uses: ./.github/workflows/build-and-publish.yml
+    with:
+      kind: prerelease
+      bump: ${{ inputs.bump }}
+      label: ${{ inputs.label }}
+      dry_run: ${{ inputs.dry_run }}
+
+  prune:
+    name: Keep only the newest pre-releases
+    needs: build
+    if: ${{ needs.build.result == 'success' }}
+    permissions:
+      contents: write   # the called workflow pushes gh-pages and deletes old releases and tags
+    uses: ./.github/workflows/prune-builds.yml
+    with:
+      kind: prerelease
+      keep: ${{ inputs.keep }}
+      dry_run: ${{ inputs.dry_run }}

@@ -1,0 +1,85 @@
+name: Prune builds
+
+# Keeps nightly builds (or pre-releases) to the newest N: takes the older ones out of appcast.xml and
+# pushes it FIRST, then deletes their GitHub Releases and tags, so the feed never points at a deleted
+# download. Called by nightly.yml (kind nightly) and prerelease.yml (kind prerelease). A dry run only
+# prints what would be removed. Rules: docs/nightly-spec.md and docs/prerelease-spec.md.
+on:
+  workflow_call:
+    inputs:
+      kind:
+        description: 'nightly or prerelease'
+        type: string
+        required: true
+      keep:
+        description: 'How many of that kind to keep'
+        type: string
+        default: "7"
+      dry_run:
+        description: 'Only print what would be removed'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  prune:
+    name: Keep only the newest builds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write   # push gh-pages, delete old releases and tags
+    env:
+      GH_TOKEN: ${{ github.token }}
+      KIND: ${{ inputs.kind }}
+      KEEP: ${{ inputs.keep }}
+      DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Pick the builds to remove
+        run: |
+          gh release list --limit 200 --json tagName,createdAt --jq '.[]|[.tagName,.createdAt]|@tsv' \
+            | sh scripts/ci/prune-builds.sh select --kind "$KIND" --keep "$KEEP" > "$RUNNER_TEMP/old-builds.txt"
+          if [ -s "$RUNNER_TEMP/old-builds.txt" ]; then
+            echo "$KIND builds beyond the newest $KEEP:"; cat "$RUNNER_TEMP/old-builds.txt"
+          else
+            echo "Nothing to prune: no more than $KEEP $KIND builds."
+          fi
+          if [ "$DRY_RUN" = "true" ]; then echo "Dry run: nothing is removed."; fi
+
+      # Feed first, releases second: the appcast must never point at a deleted download.
+      - name: Check out the appcast branch
+        if: ${{ !inputs.dry_run }}
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: site
+
+      - name: Remove them from the appcast
+        if: ${{ !inputs.dry_run }}
+        run: |
+          [ -s "$RUNNER_TEMP/old-builds.txt" ] || exit 0
+          sh scripts/ci/prune-builds.sh feed --kind "$KIND" site/appcast.xml $(cat "$RUNNER_TEMP/old-builds.txt")
+          cd site
+          git diff --quiet appcast.xml && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add appcast.xml
+          git commit -m "Prune old $KIND builds from the appcast"
+          for attempt in 1 2 3; do
+            git pull --rebase origin gh-pages && git push origin HEAD:gh-pages && exit 0
+            echo "push failed (attempt $attempt); retrying"
+            sleep $((attempt * 5))
+          done
+          echo "::error::Could not push the pruned appcast; no release was deleted."
+          exit 1
+
+      - name: Delete the old releases and their tags
+        if: ${{ !inputs.dry_run }}
+        run: |
+          [ -s "$RUNNER_TEMP/old-builds.txt" ] || exit 0
+          while read -r tag; do
+            echo "Deleting $tag"
+            gh release delete "$tag" --cleanup-tag --yes
+          done < "$RUNNER_TEMP/old-builds.txt"

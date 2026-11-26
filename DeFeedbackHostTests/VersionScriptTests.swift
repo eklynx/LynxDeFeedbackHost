@@ -215,4 +215,71 @@ struct VersionScriptTests {
         #expect(missing.status != 0)
         #expect(missing.error.contains("GITHUB_OUTPUT"))
     }
+
+    // MARK: pre-releases (docs/prerelease-spec.md PRE2, PRE3, PRE4, PRE6)
+
+    private func prerelease(_ repo: URL, bump: String? = nil, label: String? = nil) throws -> Run {
+        var extra: [String: String] = [:]
+        if let label { extra["VERSION_LABEL"] = label }
+        return try compute(in: repo, kind: "prerelease", bump: bump, extra: extra)
+    }
+
+    @Test("PRE2: the first pre-release leads to the next release and is numbered 1")
+    func firstPrerelease() throws {
+        let repo = try makeRepo(tags: ["v0.1.2"])
+        defer { try? FileManager.default.removeItem(at: repo) }
+        let run = try prerelease(repo, bump: "minor")
+        #expect(run.status == 0, "\(run.error)")
+        #expect(run.values["marketing_version"] == "0.2.0", "the app's own version stays plain X.Y.Z")
+        #expect(run.values["full_version"] == "0.2.0-beta.1")
+        #expect(run.values["tag"] == "v0.2.0-beta.1")
+        #expect(run.values["channel"] == "prerelease")
+        #expect(run.values["build_number"] == fixedStamp)
+        #expect(run.values["base_tag"] == "v0.1.2")
+    }
+
+    @Test("PRE2: numbering counts up for the same release and label, and restarts for another")
+    func prereleaseNumbering() throws {
+        let repo = try makeRepo(tags: ["v0.1.2", "v0.2.0-beta.1", "v0.2.0-beta.2", "v0.2.0-rc.1", "v0.3.0-beta.7"])
+        defer { try? FileManager.default.removeItem(at: repo) }
+        #expect(try prerelease(repo, bump: "minor").values["full_version"] == "0.2.0-beta.3")
+        #expect(try prerelease(repo, bump: "minor", label: "rc").values["full_version"] == "0.2.0-rc.2")
+        #expect(try prerelease(repo, bump: "minor", label: "alpha").values["full_version"] == "0.2.0-alpha.1")
+        #expect(try prerelease(repo, bump: "patch").values["full_version"] == "0.1.3-beta.1", "another release restarts at 1")
+        #expect(try prerelease(repo, bump: "major").values["full_version"] == "1.0.0-beta.1")
+        // Numbers compare as numbers, not as text: beta.10 follows beta.9.
+        try git(["tag", "v0.2.0-beta.9"], in: repo)
+        #expect(try prerelease(repo, bump: "minor").values["full_version"] == "0.2.0-beta.10")
+    }
+
+    @Test("PRE4: pre-release and nightly tags never count as the latest release")
+    func prereleaseTagsDontMoveTheRelease() throws {
+        let repo = try makeRepo(tags: ["v0.1.2", "v0.9.0-beta.1", "nightly-0.1.3-20261101030000.abc1234"])
+        defer { try? FileManager.default.removeItem(at: repo) }
+        let run = try prerelease(repo, bump: "minor")
+        #expect(run.values["base_tag"] == "v0.1.2")
+        #expect(run.values["full_version"] == "0.2.0-beta.1")
+        // And an ordinary release is unaffected by the beta tags.
+        #expect(try compute(in: repo).values["full_version"] == "0.1.3")
+    }
+
+    @Test("PRE6: the label must be lowercase letters only")
+    func prereleaseLabelIsValidated() throws {
+        let repo = try makeRepo(tags: ["v0.1.2"])
+        defer { try? FileManager.default.removeItem(at: repo) }
+        for label in ["Beta", "be-ta", "beta2", "b eta", "BETA"] {
+            let run = try prerelease(repo, label: label)
+            #expect(run.status != 0, "label '\(label)' should be refused")
+            #expect(run.error.contains("VERSION_LABEL"), "\(run.error)")
+            #expect(run.output.isEmpty)
+        }
+        #expect(try prerelease(repo, label: "rc").status == 0)
+    }
+
+    @Test("PRE2: with no tags a pre-release leads to 1.0.0")
+    func prereleaseWithNoTags() throws {
+        let repo = try makeRepo(tags: [])
+        defer { try? FileManager.default.removeItem(at: repo) }
+        #expect(try prerelease(repo).values["full_version"] == "1.0.0-beta.1")
+    }
 }

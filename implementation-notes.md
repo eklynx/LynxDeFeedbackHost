@@ -198,3 +198,20 @@ Callers of the shared build now pass `secrets: inherit` (one line in `release.ym
 ## Not proven yet
 That `secrets: inherit` is enough. The next Release dry run is the test. If the secret is still empty, the fallback is to stop using a reusable workflow for the job that needs the secrets and use a composite action (its steps run inside the caller's own job, which can set `environment: release` itself).
 
+# CI/CD: pre-releases (issue #3)
+
+## Decisions not in the spec
+- **Automatic version numbers, as chosen:** `compute-version.sh` gets `VERSION_KIND=prerelease` with `VERSION_BUMP` and `VERSION_LABEL`. The base is the release the build leads to (latest release bumped, exactly as a release is), and N counts up per base and label from the existing tags, numerically (beta.10 follows beta.9). Nobody types a version, so no typos and no skipped or duplicated numbers.
+- **Kept the newest 10, as chosen,** by generalising the nightly pruning: `prune-nightlies.sh` became `prune-builds.sh --kind nightly|prerelease`, and the prune job moved into a reusable `prune-builds.yml` that `nightly.yml` and `prerelease.yml` both call. A kind is required, and a tag or appcast item of another kind can never be selected or removed.
+- **A pre-release does not stop a nightly** (your choice), so the nightly skip rule is unchanged and a test pins it.
+- **The label check lists the letters** (`abc...z`) instead of using `[a-z]`: in this shell's locale the range also matched capitals and `Beta` was accepted. Found by running the script by hand, then covered by a test.
+- **Stacked on the nightly PR (#23)** because the pre-release workflow reuses that PR's shared build.
+
+## Things to know / tradeoffs
+- Pre-releases can only be built from `main` (the `release` environment and the guard are limited to it), so "a beta of a feature branch" is not possible without widening that rule.
+- After `v0.2.0` is released the earlier `0.2.0-beta.N` stay until pruned; they sort lower by build time, which is correct.
+- Not run on GitHub yet: a nightly dry run (the pruning moved into a shared workflow), a pre-release dry run, a real pre-release, and a prune with more than 10 pre-releases.
+
+## Status
+Implemented and unit-tested (rules PRE1–PRE9 and V11–V13). The real runs are in the manual checklist in `docs/prerelease-spec.md`.
+
