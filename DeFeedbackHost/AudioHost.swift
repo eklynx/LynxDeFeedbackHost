@@ -600,6 +600,29 @@ final class AudioHost {
 
     private(set) var instances: [PluginInstance] = []
 
+    #if DEBUG
+    /// Test seam (debug builds only): gives a bare host something to serve without audio hardware
+    /// or the plugin. Real devices, rates and instances come from `prepare()` and `addInstance()`.
+    func setHardwareForTesting(inputDevices: [AudioDevice],
+                               outputDevices: [AudioDevice],
+                               inputSampleRates: [Double],
+                               outputSampleRates: [Double]) {
+        self.inputDevices = inputDevices
+        self.outputDevices = outputDevices
+        self.inputSampleRates = inputSampleRates
+        self.outputSampleRates = outputSampleRates
+    }
+
+    /// Test seam (debug builds only): appends an instance that has no plugin loaded behind it, so
+    /// it publishes no Strength parameter and has no slot.
+    @discardableResult
+    func addBareInstanceForTesting(name: String) -> PluginInstance {
+        let instance = PluginInstance(name: name, changeFlag: changeFlag)
+        instances.append(instance)
+        return instance
+    }
+    #endif
+
     var selectedInstanceIndex = 0 {
         didSet { settingsChanged() }
     }
