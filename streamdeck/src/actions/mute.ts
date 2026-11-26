@@ -5,6 +5,7 @@ import streamDeck, {
 	SingletonAction,
 	WillAppearEvent
 } from "@elgato/streamdeck";
+import type {JsonObject} from "@elgato/utils";
 import { formatNamed } from './helpers.js';
 
 import fs from 'fs';
@@ -57,10 +58,10 @@ export class Mute extends SingletonAction<MuteSettings> {
 									| DidReceiveSettingsEvent<MuteSettings>
 									| KeyDownEvent<MuteSettings>
 							   , globalSettings:GlobalSettings) {
-		return Mute.updateActionFromSettings(ev.action as KeyAction, ev.payload.settings, globalSettings);
+		return Mute.updateActionFromSettings(ev.action as KeyAction<JsonObject>, ev.payload.settings, globalSettings);
 	}
 
-	private static async updateActionFromSettings(action: KeyAction, settings:MuteSettings, globalSettings:GlobalSettings) {
+	private static async updateActionFromSettings(action: KeyAction<JsonObject>, settings:MuteSettings, globalSettings:GlobalSettings) {
 
 		if (settings.instanceName) {
 
@@ -69,14 +70,14 @@ export class Mute extends SingletonAction<MuteSettings> {
 				streamDeck.logger.error(`Invalid instance ${settings.instanceName}`);
 			}
 		}
-		return Mute.updateActionImage(action as KeyAction, settings.instanceName ?? "", globalSettings);
+		return Mute.updateActionImage(action as KeyAction<JsonObject>, settings.instanceName ?? "", globalSettings);
 	}
 
-	public static async updateActionFromExternal(action: KeyAction, globalSettings:GlobalSettings) {
+	public static async updateActionFromExternal(action: KeyAction<JsonObject>, globalSettings:GlobalSettings) {
 		return Mute.updateActionFromSettings(action, await action.getSettings(), globalSettings);
 	}
 
-	private static async updateActionImage(action:KeyAction, instanceName:string, globalSettings:GlobalSettings) {
+	private static async updateActionImage(action:KeyAction<JsonObject>, instanceName:string, globalSettings:GlobalSettings) {
 		const isMuted: boolean = globalSettings.instances?.[instanceName]?.isMuted ?? false;
 		const isUnknown: boolean = !globalSettings.instances?.[instanceName];
 		const isDisconnected: boolean = !(getConnector()?.isConnected as boolean ?? false);

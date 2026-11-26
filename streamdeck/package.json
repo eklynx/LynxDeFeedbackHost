@@ -7,6 +7,7 @@
     "type": "module",
     "devDependencies": {
         "@elgato/cli": "^1.10.5",
+        "@elgato/utils": "^0.7.0",
         "@rollup/plugin-commonjs": "^28.0.0",
         "@rollup/plugin-node-resolve": "^16.0.3",
         "@rollup/plugin-terser": "^1.0.2",
