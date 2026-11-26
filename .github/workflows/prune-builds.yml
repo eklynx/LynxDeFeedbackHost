@@ -39,7 +39,9 @@ jobs:
       - uses: actions/checkout@v7
       - name: Pick the builds to remove
         run: |
-          gh release list --limit 200 --json tagName,createdAt --jq '.[]|[.tagName,.createdAt]|@tsv' \
+          # publishedAt, NOT createdAt: GitHub's createdAt for a release is the date of the commit it
+          # points at, so builds of the same commit would tie and the wrong one could be pruned.
+          gh release list --limit 200 --json tagName,publishedAt --jq '.[]|[.tagName,.publishedAt]|@tsv' \
             | sh scripts/ci/prune-builds.sh select --kind "$KIND" --keep "$KEEP" > "$RUNNER_TEMP/old-builds.txt"
           if [ -s "$RUNNER_TEMP/old-builds.txt" ]; then
             echo "$KIND builds beyond the newest $KEEP:"; cat "$RUNNER_TEMP/old-builds.txt"

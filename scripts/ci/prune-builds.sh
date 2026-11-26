@@ -3,15 +3,16 @@
 # from the Sparkle appcast so the feed never points at a deleted download.
 #
 # Usage:
-#   gh release list --json tagName,createdAt --jq '.[]|[.tagName,.createdAt]|@tsv' \
+#   gh release list --json tagName,publishedAt --jq '.[]|[.tagName,.publishedAt]|@tsv' \
 #       | scripts/ci/prune-builds.sh select --kind nightly --keep 7       # prints the tags to delete
 #   scripts/ci/prune-builds.sh feed --kind nightly <appcast.xml> <tag>... # removes those items
 #
 # --kind is `nightly` (tags nightly-*, appcast channel `nightly`) or `prerelease` (tags
 # v<X.Y.Z>-<label>.<N>, e.g. v0.2.0-beta.1, appcast channel `prerelease`).
 #
-# `select` reads `tag<TAB>createdAt` lines on stdin and prints the tags OF THAT KIND beyond the
-# newest N by date, oldest last. Releases and tags of the other kind are never listed.
+# `select` reads `tag<TAB>publishedAt` lines on stdin (publishedAt, not createdAt: GitHub's createdAt
+# for a release is the date of the commit it points at, so builds of one commit would tie) and prints
+# the tags OF THAT KIND beyond the newest N by that time, oldest last. Releases and tags of the other kind are never listed.
 #
 # `feed` removes only items that are on that kind's channel AND whose download URL is under
 # /releases/download/<tag>/ for a tag of that kind, so release items, the other kind's items, or a
@@ -54,10 +55,10 @@ case "${COMMAND}" in
         case "${KEEP}" in ''|*[!0-9]*) die "--keep must be a whole number of 1 or more" ;; esac
         [ "${KEEP}" -ge 1 ] || die "--keep must be 1 or more (refusing to delete every build)"
         TAB="$(printf '\t')"
-        # Only tags of this kind, newest first by createdAt; everything after the first KEEP is old.
-        while IFS="${TAB}" read -r tag created rest; do
-            [ -n "${tag}" ] && [ -n "${created}" ] || continue
-            is_kind_tag "${tag}" "${KIND}" && printf '%s\t%s\n' "${tag}" "${created}"
+        # Only tags of this kind, newest first by publish time; everything after the first KEEP is old.
+        while IFS="${TAB}" read -r tag published rest; do
+            [ -n "${tag}" ] && [ -n "${published}" ] || continue      # a draft has no publish time: never pruned
+            is_kind_tag "${tag}" "${KIND}" && printf '%s\t%s\n' "${tag}" "${published}"
         done | sort -t "${TAB}" -k2,2r | tail -n +"$((KEEP + 1))" | cut -f1
         ;;
 
