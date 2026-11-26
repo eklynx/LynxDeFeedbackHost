@@ -177,7 +177,7 @@ struct NightlyScriptTests {
     // MARK: N7 / N8: pruning
 
     private func select(_ lines: [String], keep: String) throws -> Run {
-        try run("/bin/sh", [script("prune-nightlies.sh"), "select", "--keep", keep], input: lines.joined(separator: "\n") + "\n")
+        try run("/bin/sh", [script("prune-builds.sh"), "select", "--kind", "nightly", "--keep", keep], input: lines.joined(separator: "\n") + "\n")
     }
 
     @Test("N7: only the newest N nightlies are kept; the rest are listed, newest of them first")
@@ -243,7 +243,7 @@ struct NightlyScriptTests {
                       item(version: "0.1.2-20261102030000.bbb", tag: "nightly-0.1.2-20261102030000.bbb", channel: "nightly")]
         try appcast(keepers + doomed).write(to: file, atomically: true, encoding: .utf8)
 
-        let result = try run("/bin/sh", [script("prune-nightlies.sh"), "feed", file.path,
+        let result = try run("/bin/sh", [script("prune-builds.sh"), "feed", "--kind", "nightly", file.path,
                                          "nightly-0.1.2-20261101030000.aaa", "nightly-0.1.2-20261102030000.bbb"])
         #expect(result.status == 0, "\(result.all)")
         #expect(result.stdout.contains("removed 2 item(s)"))
@@ -263,13 +263,13 @@ struct NightlyScriptTests {
         try original.write(to: file, atomically: true, encoding: .utf8)
 
         // Naming a release tag is refused outright.
-        let refused = try run("/bin/sh", [script("prune-nightlies.sh"), "feed", file.path, "v0.2.0"])
+        let refused = try run("/bin/sh", [script("prune-builds.sh"), "feed", "--kind", "nightly", file.path, "v0.2.0"])
         #expect(refused.status != 0)
-        #expect(refused.stderr.contains("only nightly-* tags"))
+        #expect(refused.stderr.contains("only nightly tags may be pruned"))
         #expect(try String(contentsOf: file, encoding: .utf8) == original)
 
         // A nightly tag that is not in the feed changes nothing at all.
-        let missing = try run("/bin/sh", [script("prune-nightlies.sh"), "feed", file.path, "nightly-9.9.9-20990101000000.zzz"])
+        let missing = try run("/bin/sh", [script("prune-builds.sh"), "feed", "--kind", "nightly", file.path, "nightly-9.9.9-20990101000000.zzz"])
         #expect(missing.status == 0)
         #expect(missing.stdout.contains("removed 0 item(s)"))
         #expect(try String(contentsOf: file, encoding: .utf8) == original, "byte-identical when nothing matches")
@@ -277,7 +277,7 @@ struct NightlyScriptTests {
         // A nightly-tagged URL on an item that is NOT on the nightly channel is also protected.
         let odd = appcast([item(version: "0.3.0", tag: "nightly-0.3.0-20261105030000.ddd", channel: nil)])
         try odd.write(to: file, atomically: true, encoding: .utf8)
-        let kept = try run("/bin/sh", [script("prune-nightlies.sh"), "feed", file.path, "nightly-0.3.0-20261105030000.ddd"])
+        let kept = try run("/bin/sh", [script("prune-builds.sh"), "feed", "--kind", "nightly", file.path, "nightly-0.3.0-20261105030000.ddd"])
         #expect(kept.stdout.contains("removed 0 item(s)"))
         #expect(try String(contentsOf: file, encoding: .utf8) == odd)
     }
@@ -418,14 +418,19 @@ struct NightlyScriptTests {
         let nightly = try text(".github/workflows/nightly.yml")
         #expect(nightly.contains("dry_run: ${{ inputs.dry_run || false }}"), "a dry run must reach the shared build")
 
+        // nightly.yml only calls the shared prune workflow, after a good build, with no secrets.
         let prune = try #require(nightly.components(separatedBy: "\n  prune:\n").last)
         #expect(prune.contains("needs: build"))
         #expect(prune.contains("needs.build.result == 'success'"), "prune only after a successful build")
-        #expect(!prune.contains("secrets."), "pruning must not see the signing secrets")
-        #expect(!prune.contains("environment:"))
+        #expect(prune.contains("uses: ./.github/workflows/prune-builds.yml"))
+        #expect(prune.contains("kind: nightly"))
+        #expect(prune.contains("dry_run: ${{ inputs.dry_run || false }}"), "a dry run must reach the prune")
+        #expect(!prune.contains("secrets.") && !prune.contains("environment:"), "pruning must not see the signing secrets")
 
-        // Everything that changes anything is skipped for a dry run.
-        let steps = prune.components(separatedBy: "\n      - ").dropFirst()
+        // The shared prune workflow: everything that changes anything is skipped for a dry run.
+        let shared = try text(".github/workflows/prune-builds.yml")
+        #expect(!shared.contains("secrets.") && !shared.contains("environment:"))
+        let steps = shared.components(separatedBy: "\n      - ").dropFirst()
         let changing = steps.filter {
             $0.contains("git push") || $0.contains("gh release delete") || $0.contains("ref: gh-pages")
         }
@@ -437,9 +442,8 @@ struct NightlyScriptTests {
 
     @Test("N7: the feed is pushed before any release is deleted")
     func feedBeforeReleases() throws {
-        let nightly = try text(".github/workflows/nightly.yml")
-        let prune = try #require(nightly.components(separatedBy: "\n  prune:\n").last)
-        let feed = try #require(prune.range(of: "prune-nightlies.sh feed"))
+        let prune = try text(".github/workflows/prune-builds.yml")
+        let feed = try #require(prune.range(of: "prune-builds.sh feed"))
         let push = try #require(prune.range(of: "git push origin HEAD:gh-pages"))
         let delete = try #require(prune.range(of: "gh release delete"))
         #expect(feed.lowerBound < push.lowerBound && push.lowerBound < delete.lowerBound,

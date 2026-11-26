@@ -1,21 +1,25 @@
 name: Build and publish
 
-# The shared build for releases and nightlies: guard, unit tests, version from git tags, archive,
+# The shared build for releases, nightlies and pre-releases: guard, unit tests, version from git tags, archive,
 # Developer ID sign, notarize, DMG, verify, then (unless a dry run) the GitHub Release and the
-# Sparkle appcast item. Called by release.yml (manual) and nightly.yml (daily); it never runs on its
+# Sparkle appcast item. Called by release.yml (manual), prerelease.yml (manual) and nightly.yml (daily); it never runs on its
 # own. Setup (the `release` environment and its secrets): docs/release.md. Rules: docs/release-spec.md
 # and docs/nightly-spec.md.
 on:
   workflow_call:
     inputs:
       kind:
-        description: 'release (vX.Y.Z, release channel) or nightly (nightly-<version>, nightly channel)'
+        description: 'release (vX.Y.Z), nightly (nightly-<version>) or prerelease (vX.Y.Z-<label>.<N>); each goes to its own update channel'
         type: string
         required: true
       bump:
-        description: 'Which part of the version to bump (release only)'
+        description: 'Which part of the version to bump (release and prerelease)'
         type: string
         default: patch
+      label:
+        description: 'The pre-release label, lowercase letters (prerelease only)'
+        type: string
+        default: beta
       dry_run:
         description: 'Build, sign and notarize, but publish nothing (no tag, Release or appcast). The DMG is attached to the run.'
         type: boolean
@@ -50,6 +54,7 @@ jobs:
         env:
           VERSION_KIND: ${{ inputs.kind }}
           VERSION_BUMP: ${{ inputs.bump }}
+          VERSION_LABEL: ${{ inputs.label }}
         run: |
           sh scripts/compute-version.sh | tee "$RUNNER_TEMP/version.txt"
           TAG="$(sed -n 's/^tag=//p' "$RUNNER_TEMP/version.txt")"
@@ -99,6 +104,7 @@ jobs:
         env:
           VERSION_KIND: ${{ inputs.kind }}
           VERSION_BUMP: ${{ inputs.bump }}
+          VERSION_LABEL: ${{ inputs.label }}
         run: sh scripts/compute-version.sh --github-output
 
       - name: Build the Stream Deck plugin tools

@@ -15,8 +15,9 @@ Apple and Sparkle constrain what each can hold:
 | Full version (`full_version`) | `0.1.3` or `0.1.3-20261125030000.ab12cd3` | Names artifacts, tags, release titles and update messages. |
 | Build number (`build_number`) | `20261125030000` | `CFBundleVersion` and `sparkle:version`. Sparkle orders builds by it, so it must rise across every workflow; the UTC build time does. |
 
-Two kinds of build: a **release** (started by us) and a **nightly** (automatic, when `main` changed).
-Nightlies carry a `nightly-` tag, never a `vX.Y.Z` tag, so they can't move the release number.
+Three kinds of build: a **release** (started by us), a **pre-release** (started by us, not tested enough for a
+release) and a **nightly** (automatic, when `main` changed). Nightlies carry a `nightly-` tag and pre-releases a
+`vX.Y.Z-<label>.<N>` tag, never a plain `vX.Y.Z` tag, so neither can move the release number.
 
 ## Rules
 
@@ -32,6 +33,9 @@ Nightlies carry a `nightly-` tag, never a `vX.Y.Z` tag, so they can't move the r
 | V8 | An unknown `VERSION_KIND`, `VERSION_BUMP` or a non-numeric `VERSION_TIMESTAMP` exits non-zero with a message and prints nothing. | `badInputs` |
 | V9 | A shallow clone with no tags fails with a message to fetch tags, instead of quietly returning `1.0.0`. | `shallowCloneWithoutTagsFails` |
 | V10 | `--github-output` appends the same keys to `$GITHUB_OUTPUT` (without overwriting); without that variable it fails. | `githubOutput` |
+| V11 | A pre-release (`VERSION_KIND=prerelease`, label `VERSION_LABEL`, default `beta`) leads to the next release: the latest version bumped by `VERSION_BUMP`, then `-<label>.<N>`. N is one more than the highest existing `v<X.Y.Z>-<label>.<N>` tag (numeric: beta.10 follows beta.9); another label or version starts at 1. | `firstPrerelease`, `prereleaseNumbering`, `prereleaseWithNoTags` |
+| V12 | A pre-release's marketing version stays plain `X.Y.Z`, its tag is `v<full version>`, its channel `prerelease`, its build number the UTC stamp; pre-release and nightly tags never move the latest release. | `firstPrerelease`, `prereleaseTagsDontMoveTheRelease` |
+| V13 | The label is lowercase letters only; anything else exits non-zero with a message and prints nothing. | `prereleaseLabelIsValidated` |
 
 ## Usage
 
@@ -39,6 +43,7 @@ Nightlies carry a `nightly-` tag, never a `vX.Y.Z` tag, so they can't move the r
 scripts/compute-version.sh                                   # next release (patch bump)
 VERSION_BUMP=minor scripts/compute-version.sh                # next minor release
 VERSION_KIND=nightly scripts/compute-version.sh              # next nightly
+VERSION_KIND=prerelease VERSION_BUMP=minor scripts/compute-version.sh   # next beta of the next minor release
 scripts/compute-version.sh --github-output                   # in a workflow: later steps read steps.<id>.outputs.*
 ```
 

@@ -76,6 +76,9 @@ Releases are made by hand from GitHub: Actions › **Release** › Run workflow.
 ### Nightlies:
 Every night at 03:00 UTC, if `main` changed, a signed and notarized nightly build is published (a GitHub pre-release and the **Nightly** update channel in Settings › Updates). Only the newest 7 are kept. Nightlies are for trying work in progress, not for everyday use. See [docs/nightly-spec.md](docs/nightly-spec.md).
 
+### Pre-releases:
+Work that is developed but not tested enough for a full release can be published by hand as a pre-release (Actions › **Pre-release**), for example `0.2.0-beta.1`. It is offered to anyone who chose the **Pre-release** update channel in Settings › Updates; the newest 10 are kept. See [docs/prerelease-spec.md](docs/prerelease-spec.md).
+
 ## Donations Accepted:
 As I am currently an unemployed software engineer I have not been able to afford buying a license to the DeFeedback Plugin.  All testing has been performed using the trial version.    If you find this project useful or at least promising, I do encourage you to donate!  Donations will be used to first purchase three copies of the DeFeedback plugin, one for my main development box, the others for my live sound rig for active usage/testing of this app, as well as a backup for my laptop, because any live sound engineer needs a backup for anything critical.  After that has been achieved, further donations will go to upgrading my live sound gear that this plugin directly interfaces with such as a new mixer and dante interfaces.
 So if you wish to donate, click on the '[Sponsor](https://github.com/sponsors/eklynx)' button above!

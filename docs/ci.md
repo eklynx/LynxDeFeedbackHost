@@ -35,11 +35,12 @@ Actions › Variables:
 
 A manual run (Actions › CI › Run workflow) can override the runner and include the UI tests.
 
-## Releases and nightlies
+## Releases, pre-releases and nightlies
 
-Both are manual-or-scheduled workflows that call one shared build (`build-and-publish.yml`):
-`release.yml` (manual) and `nightly.yml` (daily 03:00 UTC). See `docs/release.md`,
-`docs/release-spec.md` and `docs/nightly-spec.md`.
+All three call one shared build (`build-and-publish.yml`): `release.yml` (manual), `prerelease.yml`
+(manual) and `nightly.yml` (daily 03:00 UTC). Nightlies and pre-releases keep only the newest few
+through a shared `prune-builds.yml`. See `docs/release.md`, `docs/release-spec.md`,
+`docs/prerelease-spec.md` and `docs/nightly-spec.md`.
 
 ## Certificate expiry reminder
 

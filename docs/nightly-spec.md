@@ -1,7 +1,7 @@
 # Nightly builds: spec
 
 Source of truth in code: `.github/workflows/nightly.yml`, the shared `.github/workflows/build-and-publish.yml`,
-`scripts/ci/should-build-nightly.sh`, `scripts/ci/prune-nightlies.sh`, `scripts/compute-version.sh`,
+`.github/workflows/prune-builds.yml` (shared with the pre-release), `scripts/ci/should-build-nightly.sh`, `scripts/ci/prune-builds.sh`, `scripts/compute-version.sh`,
 `scripts/publish-update.sh`. Tests: `DeFeedbackHostTests/NightlyScriptTests.swift` and
 `ReleaseScriptTests.swift`. Origin: GitHub issue #3. Versions: `docs/versioning-spec.md`. Release:
 `docs/release-spec.md`.
@@ -18,8 +18,8 @@ only the version, the tag, the channel and the release notes differ.
 nightly.yml (03:00 UTC, or Run workflow)
   decide   should-build-nightly.sh: main moved since the newest nightly / release tag?  (force overrides)
   build    build-and-publish.yml kind=nightly   (guard, tests, sign, notarize, verify, release, appcast)
-  prune    keep the newest N (7): take the older ones out of appcast.xml and push it,
-           THEN delete their GitHub Releases and tags
+  prune    prune-builds.yml kind=nightly: keep the newest N (7): take the older ones out of
+           appcast.xml and push it, THEN delete their GitHub Releases and tags
 ```
 
 ## Rules

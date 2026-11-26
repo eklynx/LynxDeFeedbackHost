@@ -38,6 +38,13 @@ also be run by hand). It is published as a GitHub pre-release and to the **Night
 and only the newest 7 are kept. Rules, the manual checklist and recovery: `docs/nightly-spec.md`.
 It uses the same `release` environment and secrets as a release.
 
+## Pre-releases
+
+A pre-release (a build we start by hand that is not tested enough for a full release) is made with
+Actions › **Pre-release**; it goes to the **Pre-release** update channel and the newest 10 are kept.
+Version, rules and checklist: `docs/prerelease-spec.md`. It uses the same `release` environment and
+secrets as a release.
+
 ## Renewing the certificate
 
 The `cert-expiry` workflow opens an issue when the certificate is close to expiry. The renewal steps
