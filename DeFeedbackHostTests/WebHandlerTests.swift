@@ -83,6 +83,14 @@ struct WebHandlerTests {
         #expect(response.headers["Allow"] == allow)
     }
 
+    /// A quirk kept as it was: `Allow` lists HEAD for `/index.html` but HEAD is refused there
+    /// (only `/` serves it). Change both together if this is ever fixed.
+    @Test func headOnIndexHtmlIsRefusedToday() async {
+        let response = await Rig().send("HEAD", "/index.html")
+        #expect(response.status == 405)
+        #expect(response.headers["Allow"] == "GET, HEAD")
+    }
+
     @Test func unknownPathIs404() async {
         let response = await Rig().send("GET", "/nope")
         #expect(response.status == 404)
