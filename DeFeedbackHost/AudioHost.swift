@@ -106,8 +106,15 @@ final class AudioHost {
 
     /// - Parameter defaults: defaults to the standard user defaults, can be overridden here for test running purposes.
     /// - Parameter pluginInstalled: overrides the component lookup if the plugin we are hosting is installed.  Used for testing.
-    init(defaults: UserDefaults = .standard, pluginInstalled: Bool? = nil) {
+    /// - Parameter launchAgents: the launch-at-login / restart-after-crash registration, replaceable for tests.
+    /// - Parameter supervision: facts about how this process was started, replaceable for tests.
+    init(defaults: UserDefaults = .standard,
+         pluginInstalled: Bool? = nil,
+         launchAgents: LaunchAgentControlling = LaunchAgentService(),
+         supervision: LaunchSupervision = LaunchdSupervision()) {
         self.defaults = defaults
+        self.launchAgents = launchAgents
+        self.supervision = supervision
         self.isPluginInstalled = pluginInstalled ?? PluginConfiguration.isInstalled
         self.pluginAvailabilityOverride = pluginInstalled != nil
     }
@@ -480,8 +487,8 @@ final class AudioHost {
     //
     // Two independent launchd agents back these settings; see Lifecycle/LaunchSupervision.swift.
 
-    @ObservationIgnored private let launchAgents: LaunchAgentControlling = LaunchAgentService()
-    @ObservationIgnored private let supervision: LaunchSupervision = LaunchdSupervision()
+    @ObservationIgnored private let launchAgents: LaunchAgentControlling
+    @ObservationIgnored private let supervision: LaunchSupervision
 
     private(set) var loginAgentStatus: SMAppService.Status = .notRegistered
     private(set) var supervisorAgentStatus: SMAppService.Status = .notRegistered
