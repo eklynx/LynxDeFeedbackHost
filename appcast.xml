@@ -3,6 +3,17 @@
   <channel>
     <title>Lynx DeFeedback Host</title>
     <item>
+      <title>Version 0.1.3-20261126120939.3f627a5</title>
+      <pubDate>Thu, 26 Nov 2026 12:12:13 GMT</pubDate>
+      <link>https://github.com/eklynx/LynxDeFeedbackHost/releases/tag/nightly-0.1.3-20261126120939.3f627a5</link>
+      <sparkle:channel>nightly</sparkle:channel>
+      <sparkle:version>20261126120939</sparkle:version>
+      <sparkle:shortVersionString>0.1.3-20261126120939.3f627a5</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>27.0</sparkle:minimumSystemVersion>
+      <sparkle:releaseNotesLink>https://github.com/eklynx/LynxDeFeedbackHost/releases/tag/nightly-0.1.3-20261126120939.3f627a5</sparkle:releaseNotesLink>
+      <enclosure url="https://github.com/eklynx/LynxDeFeedbackHost/releases/download/nightly-0.1.3-20261126120939.3f627a5/DeFeedbackHost-0.1.3-20261126120939.3f627a5.dmg" length="5670565" type="application/octet-stream" sparkle:edSignature="gJ8uwgOkqmJIqWUi8afAHB8v6P4p+2P1fdgfN1cvS5AEwT+GzUsDxeeJAA5fi/pER9PtxSJvvVqDPb7GeUHiCA=="/>
+    </item>
+    <item>
       <title>Version 0.1.3-20261126010544.de17354</title>
       <pubDate>Thu, 26 Nov 2026 01:07:47 GMT</pubDate>
       <link>https://github.com/eklynx/LynxDeFeedbackHost/releases/tag/nightly-0.1.3-20261126010544.de17354</link>
