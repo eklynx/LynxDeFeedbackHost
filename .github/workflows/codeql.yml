@@ -1,0 +1,56 @@
+name: CodeQL
+
+# DISABLED for now (issue #34): CodeQL cannot analyze Swift 6.4 or do a traced build with Xcode 27
+# (https://github.blog/changelog/2026-10-19-codeql-changes-for-macos-27-xcode-27-and-swift-6-4),
+# and the app needs Xcode 27. Only the manual trigger is active, so the workflow can be tried by
+# hand when support arrives. To enable, uncomment the three triggers below. See
+# docs/static-checks-spec.md (rule S6).
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Runner override as JSON for the Swift job (empty uses the RUNNER_LABEL variable)'
+        required: false
+        default: ''
+  # push:
+  #   branches: [main]
+  # pull_request:
+  #   branches: [main]
+  # schedule:
+  #   - cron: '17 4 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ${{ matrix.language == 'swift' && fromJSON(inputs.runner || vars.RUNNER_LABEL || '"xcode-27"') || 'ubuntu-latest' }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [swift, javascript-typescript, actions]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Select Xcode
+        if: ${{ matrix.language == 'swift' && vars.XCODE_PATH != '' }}
+        run: sudo xcode-select -s "${{ vars.XCODE_PATH }}"
+      - uses: github/codeql-action/init@915412ff23e8b7659517e607487dbeae018f2934 # v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.language == 'swift' && 'manual' || 'none' }}
+      - name: Build
+        if: ${{ matrix.language == 'swift' }}
+        run: |
+          xcodebuild build \
+            -project DeFeedbackHost.xcodeproj \
+            -scheme DeFeedbackHost \
+            -destination 'platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY=""
+      - uses: github/codeql-action/analyze@915412ff23e8b7659517e607487dbeae018f2934 # v4
+        with:
+          category: /language:${{ matrix.language }}

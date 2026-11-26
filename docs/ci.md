@@ -42,6 +42,12 @@ All three call one shared build (`build-and-publish.yml`): `release.yml` (manual
 through a shared `prune-builds.yml`. See `docs/release.md`, `docs/release-spec.md`,
 `docs/prerelease-spec.md` and `docs/nightly-spec.md`.
 
+## Static checks
+
+SwiftLint runs on every PR (new findings only, against a baseline; part of `ci-ok`), Dependabot
+opens weekly update PRs for Actions, npm and Swift packages, and a CodeQL workflow exists but is
+disabled until it supports Xcode 27 (issue #34). See `docs/static-checks-spec.md`.
+
 ## Certificate expiry reminder
 
 A weekly workflow (`cert-expiry`) checks when the Developer ID certificate expires and opens a

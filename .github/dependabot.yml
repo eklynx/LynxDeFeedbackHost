@@ -1,0 +1,29 @@
+# Weekly dependency update pull requests. Minor and patch updates of one ecosystem arrive as a
+# single grouped PR; a major update gets its own. See docs/static-checks-spec.md (S7, S8).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /streamdeck
+    schedule:
+      interval: weekly
+    groups:
+      npm:
+        update-types: [minor, patch]
+
+  # Swift packages of the Xcode project (Sparkle). A Sparkle update changes what the release signs
+  # (its nested code), so run the Release workflow as a dry run before merging one.
+  - package-ecosystem: swift
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      swift-packages:
+        update-types: [minor, patch]

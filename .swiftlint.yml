@@ -1,0 +1,12 @@
+# Conservative starting point. Existing violations live in .swiftlint.baseline.json
+# (passed via --baseline) so CI only fails on new ones; pay the baseline down over time.
+excluded:
+  - build
+  - streamdeck
+  - DeFeedbackHostTests
+  - DeFeedbackHostUITests
+disabled_rules:
+  - line_length
+  - identifier_name
+  - type_name
+  - todo
