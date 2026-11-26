@@ -40,6 +40,8 @@ jobs:
     permissions:
       contents: write   # the called workflow tags, publishes and pushes gh-pages
     uses: ./.github/workflows/build-and-publish.yml
+    # Without `secrets: inherit` the shared build's `environment: release` values arrive empty.
+    secrets: inherit
     with:
       kind: prerelease
       bump: ${{ inputs.bump }}
