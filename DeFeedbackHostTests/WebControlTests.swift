@@ -1198,7 +1198,7 @@ struct InstanceNameTests {
     }
 
     @Test func restoredNamesAreMadeValidAndUnique() {
-        let names = AudioHost.restoredNames([nil, "Instance 1", "Keep", "keep", "bad/name", "  Trim  "])
+        let names = InstanceList.restoredNames([nil, "Instance 1", "Keep", "keep", "bad/name", "  Trim  "])
         #expect(names == ["Instance 2", "Instance 1", "Keep", "Instance 3", "Instance 4", "Trim"])
     }
 
