@@ -55,8 +55,8 @@ final class DeviceSelection {
     /// Set by the host once it is fully initialised.
     @ObservationIgnored weak var host: (any DeviceSelectionHost)?
 
-    private(set) var inputDevices: [AudioDevice] = []
-    private(set) var outputDevices: [AudioDevice] = []
+    internal(set) var inputDevices: [AudioDevice] = []
+    internal(set) var outputDevices: [AudioDevice] = []
 
     /// Select device by UID (avoid `AudioDeviceID` because it is ephemeral).
     var selectedInputDeviceUID: String? {
@@ -78,8 +78,8 @@ final class DeviceSelection {
     /// Remembered name of the previously used output audio device but it is currently not available.
     private(set) var rememberedOutputDeviceName: String?
 
-    private(set) var inputSampleRates: [Double] = []
-    private(set) var outputSampleRates: [Double] = []
+    internal(set) var inputSampleRates: [Double] = []
+    internal(set) var outputSampleRates: [Double] = []
 
     var selectedInputSampleRate: Double? {
         didSet {
@@ -103,8 +103,8 @@ final class DeviceSelection {
     @ObservationIgnored private var rememberedInputSampleRate: Double?
     @ObservationIgnored private var rememberedOutputSampleRate: Double?
 
-    private(set) var inputBufferSizeRange: ClosedRange<Int>?
-    private(set) var outputBufferSizeRange: ClosedRange<Int>?
+    /// What buffer sizes each selected device accepts; see `BufferSizeRanges`.
+    private(set) var bufferRanges = BufferSizeRanges()
 
     /// True if the sample rate menus are being updated to match hardware, so their
     /// `didSet` hooks don't try to reset the old value.
@@ -114,19 +114,7 @@ final class DeviceSelection {
     /// Set by `setHardwareForTesting`: the devices are fakes, so nothing may query or change the
     /// real hardware on their behalf (a fake device that fails to take a rate would otherwise
     /// retry forever).
-    @ObservationIgnored private var hardwareIsSimulated = false
-
-    /// Test seam (debug builds only): gives a bare host something to serve without audio hardware.
-    func setHardwareForTesting(inputDevices: [AudioDevice],
-                               outputDevices: [AudioDevice],
-                               inputSampleRates: [Double],
-                               outputSampleRates: [Double]) {
-        self.inputDevices = inputDevices
-        self.outputDevices = outputDevices
-        self.inputSampleRates = inputSampleRates
-        self.outputSampleRates = outputSampleRates
-        hardwareIsSimulated = true
-    }
+    @ObservationIgnored var hardwareIsSimulated = false
     #endif
 
     // MARK: - Selected devices
@@ -137,21 +125,6 @@ final class DeviceSelection {
 
     var selectedOutputDevice: AudioDevice? {
         outputDevices.first { $0.uid == selectedOutputDeviceUID }
-    }
-
-    /// the currently selected input audio device ID.  If nil, the device is not available.
-    var selectedInputDeviceID: AudioDeviceID? { selectedInputDevice?.id }
-    /// the currently selected output audio device ID.  If nil, the device is not available.
-    var selectedOutputDeviceID: AudioDeviceID? { selectedOutputDevice?.id }
-
-    var inputChannelCount: Int { selectedInputDevice?.inputChannelCount ?? 0 }
-    var outputChannelCount: Int { selectedOutputDevice?.outputChannelCount ?? 0 }
-
-    func channelCount(for direction: AudioHost.AudioDirection) -> Int {
-        switch direction {
-        case .input: return inputChannelCount
-        case .output: return outputChannelCount
-        }
     }
 
     func unavailableDevice(_ direction: AudioHost.AudioDirection) -> AudioHost.UnavailableDevice? {
@@ -208,10 +181,7 @@ final class DeviceSelection {
     }
 
     private func deviceID(for direction: AudioHost.AudioDirection) -> AudioDeviceID? {
-        switch direction {
-        case .input: return selectedInputDeviceID
-        case .output: return selectedOutputDeviceID
-        }
+        selectedDevice(direction)?.id
     }
 
     private func deviceName(for direction: AudioHost.AudioDirection) -> String {
@@ -263,11 +233,11 @@ final class DeviceSelection {
         #endif
         guard let id = deviceID(for: direction) else {
             setSampleRates([], selection: nil, for: direction)
-            setBufferSizeRange(nil, for: direction)
+            bufferRanges.set(nil, for: direction)
             return
         }
 
-        setBufferSizeRange(AudioHardware.bufferFrameSizeRange(id), for: direction)
+        bufferRanges.set(AudioHardware.bufferFrameSizeRange(id), for: direction)
 
         var rates = AudioHardware.availableSampleRates(id)
         let current = AudioHardware.nominalSampleRate(id)
@@ -289,10 +259,6 @@ final class DeviceSelection {
         case .input: return inputSampleRates
         case .output: return outputSampleRates
         }
-    }
-
-    var doSampleRatesMatch: Bool {
-        AudioHost.ratesMatch(selectedInputSampleRate, selectedOutputSampleRate)
     }
 
     /// The rate to save for a direction: the selected one, or the last one used while the device is away.
@@ -363,37 +329,6 @@ final class DeviceSelection {
                 refreshDeviceCapabilities(direction)
             }
         }
-    }
-
-    // MARK: - Buffer size
-
-    private func setBufferSizeRange(_ range: ClosedRange<Int>?, for direction: AudioHost.AudioDirection) {
-        switch direction {
-        case .input: inputBufferSizeRange = range
-        case .output: outputBufferSizeRange = range
-        }
-    }
-
-    func bufferSizeRange(for direction: AudioHost.AudioDirection) -> ClosedRange<Int>? {
-        switch direction {
-        case .input: return inputBufferSizeRange
-        case .output: return outputBufferSizeRange
-        }
-    }
-
-    /// Gets a list of devices that are rejecting the selected buffer size.
-    var devicesRejectingBufferSize: [String] {
-        let bufferSize = host?.bufferSize ?? 0
-        var names: [String] = []
-        if let device = selectedInputDevice,
-           let range = inputBufferSizeRange, !range.contains(bufferSize) {
-            names.append(device.name)
-        }
-        if let device = selectedOutputDevice,
-           let range = outputBufferSizeRange, !range.contains(bufferSize) {
-            names.append(device.name)
-        }
-        return names
     }
 
     // MARK: - Restoring

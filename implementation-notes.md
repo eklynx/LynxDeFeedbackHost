@@ -399,3 +399,33 @@ Host/Engine/
 
 ## Status
 Baseline 5 -> 3 entries (AudioHost class body and file length, AudioIO).
+
+# Lint cleanup: AudioHost split, step C4 (issue #41, PR C4)
+
+## What I changed in C4
+```text
+Host/
+├── Devices/
+│   ├── DeviceSelection.swift        devices, chosen UIDs, remembered names/rates, sample rates, refresh from the system
+│   ├── BufferSizeRanges.swift       what each device accepts; `devicesRejecting(...)`
+│   ├── DeviceSelection+Testing.swift  debug-only fake-hardware seam
+│   └── AudioHost+Devices.swift      forwarding members (host.selectedInputDeviceUID, ...) + the `ratesMatch` / `menuSelection` statics
+├── Instances/AudioHost+Instances.swift     forwarders to InstanceList (moved out of the class body)
+├── LaunchAgents/AudioHost+Launch.swift     forwarders to LaunchAgentSettings (moved)
+├── Persistence/AudioHost+Persistence.swift currentSettings(), apply(_:), reconcile... (what PersistableHost asks of the host)
+└── AudioHost+Testing.swift                 debug-only seams
+```
+`DeviceSelection` keeps the `didSet` chain intact: choosing a device remembers its name, re-reads capabilities, tells the host (`deviceSelectionDidChange()` clears a pending auto-restart), then marks settings changed. `AudioHost.refreshDevices()` is now: refresh the list, stop if a device was lost, refresh capabilities if stopped, resume if devices returned.
+
+## How I kept behaviour the same
+- First wrote `DeviceSelectionCharacterizationTests` (selection, remembered names, unavailable devices, rate remembered after clearing, `canStart`, every `startBlockedReason` text, buffer-size gate with unknown ranges) using simulated hardware, and ran them on the OLD code. They pass before and after.
+- Full `DeFeedbackHostTests` green; a Release build also succeeds (the debug seams are `#if DEBUG`).
+- Compared the old `AudioHost` members with the new tree: every one still exists, except `loginAgentStatus` / `supervisorAgentStatus`, which nothing outside the host used and which are now `LaunchAgentSettings.loginStatus` / `.supervisorStatus`.
+
+## Things to know
+- **Extension files, and why:** SwiftLint counts a file's lines (limit 400) and the class body (limit 250 warning / 350 error) separately. Pure forwarding members and the protocol-glue (`currentSettings()` etc.) live in `AudioHost+*.swift` next to the collaborator they belong to. The logic and the state are in the extracted types; the extensions are the facade only. Stored properties (`launch`, `instanceList`, `session`, `persistence`, `deviceSelection`) stay in the class, so some lost `private` to be reachable from those files.
+- Final sizes: `AudioHost.swift` 1370 -> 390 lines, class body 910 -> about 200 counted lines. No new warnings; no `swiftlint:disable`.
+- Auto-resume (`stopIfDeviceLost`, `resumeIfDevicesReturned`) and `startBlockedReason` stayed in `AudioHost`; they coordinate several collaborators.
+
+## Status
+Baseline: 1 entry left, `AudioIO.start` (7 parameters). When that is fixed, delete `.swiftlint.baseline.json`, drop `--baseline` from CI, and close #41.

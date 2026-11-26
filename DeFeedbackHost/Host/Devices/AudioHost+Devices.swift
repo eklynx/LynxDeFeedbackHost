@@ -38,9 +38,9 @@ extension AudioHost {
     var selectedOutputDevice: AudioDevice? { deviceSelection.selectedOutputDevice }
 
     /// the currently selected input audio device ID.  If nil, the device is not available.
-    var selectedInputDeviceID: AudioDeviceID? { deviceSelection.selectedInputDeviceID }
+    var selectedInputDeviceID: AudioDeviceID? { selectedInputDevice?.id }
     /// the currently selected output audio device ID.  If nil, the device is not available.
-    var selectedOutputDeviceID: AudioDeviceID? { deviceSelection.selectedOutputDeviceID }
+    var selectedOutputDeviceID: AudioDeviceID? { selectedOutputDevice?.id }
 
     /// the currently selected input audio device information when it is not available in the system.
     var unavailableInputDevice: UnavailableDevice? { deviceSelection.unavailableDevice(.input) }
@@ -51,10 +51,15 @@ extension AudioHost {
         deviceSelection.unavailableDevice(direction)
     }
 
-    var inputChannelCount: Int { deviceSelection.inputChannelCount }
-    var outputChannelCount: Int { deviceSelection.outputChannelCount }
+    var inputChannelCount: Int { selectedInputDevice?.inputChannelCount ?? 0 }
+    var outputChannelCount: Int { selectedOutputDevice?.outputChannelCount ?? 0 }
 
-    func channelCount(for direction: AudioDirection) -> Int { deviceSelection.channelCount(for: direction) }
+    func channelCount(for direction: AudioDirection) -> Int {
+        switch direction {
+        case .input: return inputChannelCount
+        case .output: return outputChannelCount
+        }
+    }
 
     // MARK: - Sample rates
 
@@ -71,7 +76,9 @@ extension AudioHost {
         set { deviceSelection.selectedOutputSampleRate = newValue }
     }
 
-    var doSampleRatesMatch: Bool { deviceSelection.doSampleRatesMatch }
+    var doSampleRatesMatch: Bool {
+        Self.ratesMatch(selectedInputSampleRate, selectedOutputSampleRate)
+    }
 
     func sampleRates(for direction: AudioDirection) -> [Double] { deviceSelection.sampleRates(for: direction) }
 
@@ -98,13 +105,17 @@ extension AudioHost {
 
     // MARK: - Buffer size
 
-    var inputBufferSizeRange: ClosedRange<Int>? { deviceSelection.inputBufferSizeRange }
-    var outputBufferSizeRange: ClosedRange<Int>? { deviceSelection.outputBufferSizeRange }
+    var inputBufferSizeRange: ClosedRange<Int>? { deviceSelection.bufferRanges.input }
+    var outputBufferSizeRange: ClosedRange<Int>? { deviceSelection.bufferRanges.output }
 
     func bufferSizeRange(for direction: AudioDirection) -> ClosedRange<Int>? {
-        deviceSelection.bufferSizeRange(for: direction)
+        deviceSelection.bufferRanges.range(for: direction)
     }
 
     /// Gets a list of devices that are rejecting the selected buffer size.
-    var devicesRejectingBufferSize: [String] { deviceSelection.devicesRejectingBufferSize }
+    var devicesRejectingBufferSize: [String] {
+        deviceSelection.bufferRanges.devicesRejecting(bufferSize,
+                                                      input: selectedInputDevice,
+                                                      output: selectedOutputDevice)
+    }
 }
