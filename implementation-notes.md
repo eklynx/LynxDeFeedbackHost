@@ -241,3 +241,34 @@ The prune workflow now passes `publishedAt` (the real time). A draft has no `pub
 
 ## Status
 Implemented and unit-tested (rules S1–S8).
+
+# Lint cleanup: WebControlService split (issue #41)
+
+## What I changed
+`WebControlService.swift` (965 lines, class body 640, two functions at complexity 22 and 30) is now split by responsibility instead of by moving code into extension files:
+
+```text
+Web/
+├── WebErrorStrings.swift          the error messages, moved as is
+├── WebRequestValidation.swift     body checks that need no host; a failed check throws WebRejection
+├── WebInstanceChanges.swift       parse-then-apply for PATCH /api/instances/{id}
+├── WebStatusPayload.swift         the status / update / instance JSON, reads the host only
+├── WebRoutes.swift                the route table (replaces the 22-way switch)
+├── WebControlService+Commands.swift   the command handlers
+└── WebControlService.swift        state, lifecycle, status stream
+```
+Validation uses `throws` (a `WebRejection` carries the response) instead of the old `CheckedValue` enum that every call site had to `switch` on; that is what removes most of the complexity. Nothing is applied until every field has passed, same fixed order as before.
+
+## How I kept behaviour the same
+- First wrote `WebHandlerTests` (41 tests: routes, 405 table, every status code and error order of the command endpoints, nothing applied on a later bad field) and ran them on the OLD code. They passed there and still pass on the new code.
+- `OpenAPIConformanceTests` read the Swift source as text; they now read `WebStatusPayload.swift` (`func status(`) and `WebRoutes.swift`.
+
+## Things to know
+- **A quirk kept as it was:** `HEAD /index.html` is refused (405) although the `Allow` header lists HEAD; only `/` serves HEAD. A test pins it so a fix is a deliberate change.
+- **Another quirk kept:** `{"running": 1}` counts as `true` (a JSON number bridges to Bool). Not pinned; worth tightening separately.
+- **Test seams (debug builds only) in `AudioHost`:** `setHardwareForTesting` and `addBareInstanceForTesting`, so handler tests need no audio hardware or plugin. The first sets a flag that stops the host querying or changing real devices on behalf of the fake ones.
+- **Not covered by the new tests** (need a running host or the real plugin): the "stop the host first" 409s, a successful add, Strength values.
+- **A bug I introduced and fixed on the way:** my first route table wrapped handlers in a helper named like the `respond` enum case and recursed forever (a test run ballooned to several GB). The table now uses plain named functions. I also ran the tests under a memory kill-switch after that.
+
+## Status
+Baseline: 21 -> 13 findings (all of WebControlService's gone). Left: AudioHost, HTTPMessage, ContentView, PluginInstance, AudioIO, HTTPServer.

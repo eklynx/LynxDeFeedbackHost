@@ -30,7 +30,7 @@ struct WebStatusPayload {
             "version": status.availableVersion ?? NSNull(),
             "channel": status.channel.rawValue,
             "releasesURL": status.releasesPage.absoluteString,
-            "releaseNotesURL": status.releaseNotesURL.absoluteString,
+            "releaseNotesURL": status.releaseNotesURL.absoluteString
         ]
     }
 
@@ -85,12 +85,12 @@ struct WebStatusPayload {
             "underruns": diagnostics?.underruns ?? 0,
             "hasRendered": diagnostics?.hasRendered ?? false,
             "realtime": diagnostics?.audioThreadsAreRealtime ?? true,
-            "error": host.errorMessage ?? NSNull(),
+            "error": host.errorMessage ?? NSNull()
         ]
     }
 
     private static func deviceList(_ devices: [AudioDevice],
-                                 channels: KeyPath<AudioDevice, Int>) -> [[String: Any]] {
+                                   channels: KeyPath<AudioDevice, Int>) -> [[String: Any]] {
         devices.map { device in
             ["uid": device.uid,
              "name": device.name,
@@ -114,7 +114,7 @@ struct WebStatusPayload {
             "bypassed": instance.isBypassed,
             "inputChannel": instance.inputChannel,
             "outputChannel": instance.outputChannel,
-            "error": instance.loadError ?? NSNull(),
+            "error": instance.loadError ?? NSNull()
         ]
     }
 

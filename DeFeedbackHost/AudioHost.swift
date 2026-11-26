@@ -367,6 +367,9 @@ final class AudioHost {
 
     /// refreshes what sample rates and buffer sizes are available for the device.
     private func refreshDeviceCapabilities(_ direction: AudioDirection) {
+        #if DEBUG
+        if hardwareIsSimulated { return }
+        #endif
         guard let id = deviceID(for: direction) else {
             setSampleRates([], selection: nil, for: direction)
             setBufferSizeRange(nil, for: direction)
@@ -403,6 +406,9 @@ final class AudioHost {
 
     private func applySampleRate(_ direction: AudioDirection) {
         guard !isSyncingSampleRates, !isRunning else { return }
+        #if DEBUG
+        if hardwareIsSimulated { return }
+        #endif
         guard let id = deviceID(for: direction),
               let target = direction == .input ? selectedInputSampleRate : selectedOutputSampleRate
         else { return }
@@ -601,6 +607,11 @@ final class AudioHost {
     private(set) var instances: [PluginInstance] = []
 
     #if DEBUG
+    /// Set by `setHardwareForTesting`: the devices are fakes, so nothing may query or change the
+    /// real hardware on their behalf (a fake device that fails to take a rate would otherwise
+    /// retry forever).
+    @ObservationIgnored private var hardwareIsSimulated = false
+
     /// Test seam (debug builds only): gives a bare host something to serve without audio hardware
     /// or the plugin. Real devices, rates and instances come from `prepare()` and `addInstance()`.
     func setHardwareForTesting(inputDevices: [AudioDevice],
@@ -611,6 +622,7 @@ final class AudioHost {
         self.outputDevices = outputDevices
         self.inputSampleRates = inputSampleRates
         self.outputSampleRates = outputSampleRates
+        hardwareIsSimulated = true
     }
 
     /// Test seam (debug builds only): appends an instance that has no plugin loaded behind it, so
