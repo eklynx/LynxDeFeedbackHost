@@ -37,13 +37,16 @@ final class AudioHost {
         self.defaults = defaults
         self.launch = LaunchAgentSettings(agents: launchAgents, supervision: supervision)
         self.persistence = SettingsPersistence(defaults: defaults, changeFlag: changeFlag)
-        self.instanceList = InstanceList(changeFlag: changeFlag)
+        let instanceList = InstanceList(changeFlag: changeFlag)
+        self.instanceList = instanceList
+        self.session = EngineSession(instances: instanceList)
         self.isPluginInstalled = pluginInstalled ?? PluginConfiguration.isInstalled
         self.pluginAvailabilityOverride = pluginInstalled != nil
 
         launch.onError = { [weak self] message in self?.errorMessage = message }
         persistence.host = self
         instanceList.host = self
+        session.host = self
     }
 
     // MARK: - Plugin availability
@@ -354,7 +357,7 @@ final class AudioHost {
         let name = deviceName(for: direction)
         Task {
             AudioHardware.setNominalSampleRate(target, for: id)
-            let applied = await awaitSampleRate(target, on: id)
+            let applied = await EngineSession.awaitSampleRate(target, on: id)
             if !applied {
                 errorMessage = AudioHostError
                     .sampleRateNotApplied(name, target).localizedDescription
@@ -454,7 +457,7 @@ final class AudioHost {
     // MARK: - ServiceState
 
     private(set) var isRunning = false
-    private(set) var runningSampleRate: Double = 0
+    var runningSampleRate: Double { session.runningSampleRate }
     var errorMessage: String?
 
     /// Human readable version on why `canStart` is false, or `nil` when nothing is blocking.
@@ -560,11 +563,11 @@ final class AudioHost {
 
     // MARK: - Private state
 
-    @ObservationIgnored private var engineController: CoreAudioEngineControl?
+    /// Owns the running engine and its I/O; see `EngineSession`.
+    @ObservationIgnored private let session: EngineSession
 
     /// The engine while audio is running; nil when stopped.
-    var liveEngine: CoreAudioEngineControl? { engineController }
-    @ObservationIgnored private var io: AudioIO?
+    var liveEngine: CoreAudioEngineControl? { session.engine }
     @ObservationIgnored private var deviceMonitor: DeviceListMonitor?
 
     /// True if the sample rate menus are being updated to match hardware, so their
@@ -792,11 +795,11 @@ final class AudioHost {
         guard !isRunning else { return }
         errorMessage = nil
         do {
-            try await startAudio()
+            try await session.start()
             isRunning = true
         } catch {
             errorMessage = error.localizedDescription
-            teardown()
+            session.teardown()
         }
     }
 
@@ -804,7 +807,7 @@ final class AudioHost {
         guard isRunning else { return }
 
         resumeWhenDevicesReturn = false
-        teardown()
+        session.teardown()
         isRunning = false
 
         // Buffer size / parallel rendering edits made via `defaults write` while running were held back.
@@ -814,158 +817,20 @@ final class AudioHost {
         persistence.saveNow()
     }
 
-    private func startAudio() async throws {
-
-        guard isPluginInstalled else {
-            throw AudioHostError.pluginNotInstalled
-        }
-
-        guard let input = selectedInputDevice, let output = selectedOutputDevice else {
-            throw AudioHostError.noDeviceSelected
-        }
-
-        // wait for privacy setting in case waiting on user click.
-        guard await ensureMicrophoneAccess() else {
-            throw AudioHostError.microphoneAccessDenied
-        }
-
-        guard let inputRate = selectedInputSampleRate,
-              let outputRate = selectedOutputSampleRate else {
-            throw AudioHostError.sampleRateUnavailable(output.name)
-        }
-        guard Self.ratesMatch(inputRate, outputRate) else {
-            throw AudioHostError.sampleRateMismatch(input: inputRate, output: outputRate)
-        }
-        let sampleRate = outputRate
-
-        for direction in AudioDirection.allCases {
-            let device = direction == .input ? input : output
-            guard let current = AudioHardware.nominalSampleRate(device.id) else {
-                throw AudioHostError.sampleRateUnavailable(device.name)
-            }
-            guard !Self.ratesMatch(current, sampleRate) else { continue }
-
-            AudioHardware.setNominalSampleRate(sampleRate, for: device.id)
-            // verify sample rate successfully updated
-            guard await awaitSampleRate(sampleRate, on: device.id) else {
-                throw AudioHostError.sampleRateNotApplied(device.name, sampleRate)
-            }
-        }
-
-        let inputFrames = AudioHardware.setBufferFrameSize(bufferSize, for: input.id)
-        let outputFrames = AudioHardware.setBufferFrameSize(bufferSize, for: output.id)
-
-        guard let inputFrames, inputFrames == bufferSize else {
-            throw AudioHostError.bufferSizeNotApplied(input.name, requested: bufferSize,
-                                                      actual: inputFrames)
-        }
-        guard let outputFrames, outputFrames == bufferSize else {
-            throw AudioHostError.bufferSizeNotApplied(output.name, requested: bufferSize,
-                                                      actual: outputFrames)
-        }
-
-        let maximumFrameCount = bufferSize
-
-        // Setup the audio engine
-        guard let controller = CoreAudioEngineControl(maximumFrameCount: maximumFrameCount,
-                                        inputChannelCount: input.inputChannelCount,
-                                        outputChannelCount: output.outputChannelCount,
-                                        sampleRate: sampleRate) else {
-            throw AudioHostError.engineUnavailable
-        }
-        self.engineController = controller
-        runningSampleRate = sampleRate
-
-        controller.setParallelRendering(
-            parallelRendering,
-            instanceThreshold: PluginConfiguration.parallelRenderingInstanceThreshold)
-
-        for instance in instances {
-            try instanceList.activate(instance, in: controller)
-        }
-        controller.primeWithSilence(frameCount: maximumFrameCount * 2)
-
-        // wire up the c++ audio.
-        let io = try AudioIO()
-        self.io = io
-        try io.start(engine: controller,
-                     inputDeviceID: input.id,
-                     inputChannelCount: input.inputChannelCount,
-                     outputDeviceID: output.id,
-                     outputChannelCount: output.outputChannelCount,
-                     sampleRate: sampleRate,
-                     maximumFrameCount: maximumFrameCount)
-    }
-
-    private func ensureMicrophoneAccess() async -> Bool {
-        switch AVCaptureDevice.authorizationStatus(for: .audio) {
-        case .authorized:
-            return true
-        case .notDetermined:
-            return await AVCaptureDevice.requestAccess(for: .audio)
-        default:
-            return false
-        }
-    }
-
-    private func awaitSampleRate(_ target: Double,
-                                 on device: AudioDeviceID,
-                                 timeout: Duration = .seconds(2)) async -> Bool {
-        let deadline = ContinuousClock.now.advanced(by: timeout)
-        while ContinuousClock.now < deadline {
-            if Self.ratesMatch(AudioHardware.nominalSampleRate(device), target) {
-                return true
-            }
-            try? await Task.sleep(for: .milliseconds(50))
-        }
-        return false
-    }
-
-    private func teardown() {
-        // Stop the audio IO
-        io?.stop()
-        io = nil
-
-        // free plugin instances
-        if let engineController {
-            for instance in instances {
-                if let slot = instance.slot {
-                    engineController.retire(slot)
-                    engineController.release(slot)
-                }
-                instance.slot = nil
-                instance.teardownRenderResources()
-            }
-            engineController.setInputUnit(nil)
-        }
-
-        engineController = nil
-        runningSampleRate = 0
+    /// What `EngineSession` reads at each stage of starting.
+    func engineStartSettings() -> EngineStartSettings {
+        EngineStartSettings(pluginInstalled: isPluginInstalled,
+                            input: selectedInputDevice,
+                            output: selectedOutputDevice,
+                            inputRate: selectedInputSampleRate,
+                            outputRate: selectedOutputSampleRate,
+                            bufferSize: bufferSize,
+                            parallelRendering: parallelRendering)
     }
 
     // MARK: - Diagnostics
 
     typealias Diagnostics = EngineDiagnostics
 
-    /// Non-zero cycle counts are the difference between "the units started" and "audio is
-    /// actually moving". Underruns are the audible symptom of two devices drifting apart.
-    ///  - Thanks to AI for giving these meaningful metrics
-    var diagnostics: Diagnostics? {
-        guard let engineController else { return nil }
-
-        let period = engineController.bufferPeriodNanoseconds
-        let smoothed = Double(engineController.smoothedRenderNanoseconds)
-        let peak = Double(engineController.peakRenderNanoseconds)
-
-        return Diagnostics(
-            captureCycles: engineController.captureCycles,
-            renderCycles: engineController.renderCycles,
-            underruns: engineController.underruns,
-            dspLoad: period > 0 ? smoothed / period : 0,
-            peakDspLoad: period > 0 ? peak / period : 0,
-            renderThreadPolicy: RealtimeThreadPolicy.read(port: engineController.renderThreadPort),
-            captureThreadPolicy: RealtimeThreadPolicy.read(port: engineController.captureThreadPort),
-            workerThreadPolicies: engineController.workerThreadPolicies,
-            parallelRenderingEngaged: engineController.isParallelRenderingEngaged)
-    }
+    var diagnostics: Diagnostics? { session.diagnostics }
 }
