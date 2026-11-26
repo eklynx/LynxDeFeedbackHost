@@ -63,6 +63,8 @@ jobs:
     permissions:
       contents: write   # the called workflow tags, publishes and pushes gh-pages
     uses: ./.github/workflows/build-and-publish.yml
+    # Without `secrets: inherit` the shared build's `environment: release` secrets arrive empty.
+    secrets: inherit
     with:
       kind: nightly
       dry_run: ${{ inputs.dry_run || false }}

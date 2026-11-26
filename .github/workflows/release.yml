@@ -31,6 +31,10 @@ jobs:
     permissions:
       contents: write   # the called workflow tags, publishes and pushes gh-pages
     uses: ./.github/workflows/build-and-publish.yml
+    # The shared build's job sets `environment: release` to read the signing material. A called
+    # workflow only gets it when the caller also passes `secrets: inherit` (found by the first dry
+    # run through the shared build: without it the certificate value arrived empty).
+    secrets: inherit
     with:
       kind: release
       bump: ${{ inputs.bump }}

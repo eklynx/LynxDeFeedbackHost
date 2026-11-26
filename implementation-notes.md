@@ -187,3 +187,14 @@ Implemented and unit-tested (rules C1–C9). Not run on GitHub yet: the schedule
 ## Status
 Implemented and unit-tested (rules N1–N10). The real runs are in the manual checklist in `docs/nightly-spec.md`.
 
+# CI/CD: secrets reaching the shared build (issue #3)
+
+## What happened
+The first Release dry run through the shared build (`build-and-publish.yml`) passed the guard and the unit tests, then failed at "Import the signing certificate" because the certificate secret was **empty** inside the called workflow. The job sets `environment: release`, and GitHub's docs say that is enough to read that environment's secrets, but in practice the secrets did not arrive.
+
+## What I changed
+Callers of the shared build now pass `secrets: inherit` (one line in `release.yml` and `nightly.yml`). One third-party write-up reports that environment secrets of a called job are empty unless the caller does this, which matches what we saw; I could not confirm it against GitHub's own docs, which say `environment:` alone works. A test pins that both callers pass it.
+
+## Not proven yet
+That `secrets: inherit` is enough. The next Release dry run is the test. If the secret is still empty, the fallback is to stop using a reusable workflow for the job that needs the secrets and use a composite action (its steps run inside the caller's own job, which can set `environment: release` itself).
+
