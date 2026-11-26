@@ -9,45 +9,6 @@ import AVFAudio
 import AudioToolbox
 import CoreAudioKit
 import SwiftUI
-import Synchronization
-
-/// Plugin UI view possibilities.
-enum PluginUI {
-    case loading
-    /// AUv3 units, and AUv2 units with a custom Cocoa view, gives us a view controller.
-    case controller(NSViewController)
-    /// Fallback for AUv2 units with no custom view.
-    case genericView(NSView)
-    case unavailable(String)
-}
-
-/// Lets a non-`Sendable` AppKit object ride back from the audio unit's private callback thread.
-private nonisolated final class UncheckedBox<Value>: @unchecked Sendable {
-    let value: Value
-    init(_ value: Value) { self.value = value }
-}
-
-/// A value holder for an AU parameter in an Atomic fashion for passing to the instance plugins.
-/// Parameters are done this way so the pulugin instances can set values without blocking.
-private nonisolated final class ParameterSnapshot: @unchecked Sendable {
-
-    private static let absent = UInt64.max
-    private let stored = Atomic<UInt64>(absent)
-
-    var value: AUValue? {
-        let raw = stored.load(ordering: .relaxed)
-        guard raw != Self.absent else { return nil }
-        return AUValue(bitPattern: UInt32(truncatingIfNeeded: raw))
-    }
-
-    func store(_ value: AUValue) {
-        stored.store(UInt64(value.bitPattern), ordering: .relaxed)
-    }
-
-    func clear() {
-        stored.store(Self.absent, ordering: .relaxed)
-    }
-}
 
 enum PluginInstanceError: LocalizedError {
     case componentNotFound
@@ -60,69 +21,6 @@ enum PluginInstanceError: LocalizedError {
         case .formatRejected:
             return "The AU Component rejected both mono and stereo buses at the specified sample rate."
         }
-    }
-}
-
-enum InstanceNameError: LocalizedError, Equatable {
-    case empty
-    case tooLong
-    case invalidCharacters
-    case duplicate(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .empty:
-            return "The instance name cannot be empty."
-        case .tooLong:
-            return "The instance name max length is \(InstanceName.maxLength) characters."
-        case .invalidCharacters:
-            return "The instance name cannot contain control characters or \"/\"."
-        case .duplicate(let name):
-            return "The instance name \"\(name)\" is already taken."
-        }
-    }
-}
-
-nonisolated enum InstanceName {
-
-    static let maxLength = 32
-
-    static let defaultPrefix = "Instance "
-
-    private static let disallowed = CharacterSet.controlCharacters
-        .union(CharacterSet(charactersIn: "/"))
-
-    static func normalized(_ name: String) -> String {
-        name.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    static func sanitized(_ name: String) -> String {
-        let allowed = String(name.unicodeScalars.filter { !disallowed.contains($0) })
-        return String(allowed.prefix(maxLength))
-    }
-
-    static func matches(_ lhs: String, _ rhs: String) -> Bool {
-        lhs.caseInsensitiveCompare(rhs) == .orderedSame
-    }
-
-    static func validate(_ name: String, among others: [String]) -> InstanceNameError? {
-        if name.isEmpty { return .empty }
-        if name.count > maxLength { return .tooLong }
-        if name.unicodeScalars.contains(where: { disallowed.contains($0) }) {
-            return .invalidCharacters
-        }
-        if let clash = others.first(where: { matches($0, name) }) {
-            return .duplicate(clash)
-        }
-        return nil
-    }
-
-    static func defaultName(among names: [String]) -> String {
-        var number = 1
-        while names.contains(where: { matches($0, defaultPrefix + String(number)) }) {
-            number += 1
-        }
-        return defaultPrefix + String(number)
     }
 }
 
@@ -202,7 +100,7 @@ final class PluginInstance: Identifiable {
 
     var strengthPercent: Int? {
         guard let value = strengthSnapshot.value else { return nil }
-        return Self.percentFromAUValue(of: value, from: strength.lowest, span: strength.span)
+        return strength.percent(of: value)
     }
 
     var pluginMuted: Bool? {
@@ -217,7 +115,7 @@ final class PluginInstance: Identifiable {
     func setStrengthPercent(_ percent: Int) -> Bool {
         guard let strengthParameter else { return false }
 
-        let value = Self.auValueFromPercent(forPercent: percent, from: strength.lowest, span: strength.span)
+        let value = strength.value(forPercent: percent)
         strengthParameter.value = value
         strengthSnapshot.store(value)
         changeFlag.markDirty()
@@ -253,12 +151,6 @@ final class PluginInstance: Identifiable {
     @ObservationIgnored private var strengthParameter: AUParameter?
     @ObservationIgnored private var muteParameter: AUParameter?
 
-    private struct WatchedParameter {
-        var address: AUParameterAddress?
-        var lowest: AUValue = 0
-        var span: AUValue = 1
-    }
-
     @ObservationIgnored private var strength = WatchedParameter()
     @ObservationIgnored private var mute = WatchedParameter()
 
@@ -289,21 +181,6 @@ final class PluginInstance: Identifiable {
         mute = watch(foundParam.mute, with: muteSnapshot)
         strengthParameter = foundParam.strength
         muteParameter = foundParam.mute
-    }
-
-    nonisolated static func percentFromAUValue(of value: AUValue,
-                                               from lowest: AUValue,
-                                               span: AUValue) -> Int {
-        guard span > 0 else { return 0 }
-        let fraction = (value - lowest) / span
-        return min(100, max(0, Int((fraction * 100).rounded())))
-    }
-
-    nonisolated static func auValueFromPercent(forPercent percent: Int,
-                                               from lowest: AUValue,
-                                               span: AUValue) -> AUValue {
-        let clamped = min(100, max(0, percent))
-        return lowest + span * AUValue(clamped) / 100
     }
 
     // MARK: - Persistable plugin state

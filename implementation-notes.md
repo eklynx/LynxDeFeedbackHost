@@ -298,3 +298,33 @@ Web/
 
 ## Status
 Baseline: 13 -> 9 findings. Left: AudioHost (4), ContentView (2), PluginInstance (2), AudioIO (1).
+
+# Lint cleanup: PluginInstance and ContentView (issue #41, PR B)
+
+## What I changed
+```text
+DeFeedbackHost/
+├── PluginInstance.swift     the class and its error (461 -> 338 lines)
+├── InstanceName.swift       InstanceName + InstanceNameError, moved as is
+├── PluginUI.swift           PluginUI + UncheckedBox (were file-private, now internal)
+├── ParameterSnapshot.swift  the lock-free AU-value holder, moved as is (was file-private)
+├── WatchedParameter.swift   address + range of a watched parameter, owns the percent <-> AUValue maths
+├── ContentView.swift        layout, banners, removal dialog (450 -> 136 lines)
+├── EngineControlBar.swift   pickers, buffer/parallel/run row, instance stepper
+├── LoadReadout.swift        pure text/colour/help for the engine readout + the StatusReadout view
+└── InstanceGallery.swift    chooser, chevrons, empty and missing-plugin states
+```
+- `WatchedParameter` replaced a private struct inside the class and took the two conversion functions with it, which is what got the class body under 250. `WebControlTests` calls them as `WatchedParameter.percentFromAUValue` / `auValueFromPercent` now; the assertions are unchanged.
+- `EngineControlBar` reports "remove the shown instance" through a closure; the confirmation state and dialog stay in `ContentView`.
+- `LoadReadout.help` takes `parallelRendering` as a parameter where the old private method read `host`.
+
+## How I kept behaviour the same
+- The readout text and colours were copied verbatim into `LoadReadout` first, pinned with `LoadReadoutTests` (waiting state, NOT REALTIME, colour thresholds, per-worker help lines, percent rounding, the denied-microphone banner rule), and only then did the view start calling them.
+- Full `DeFeedbackHostTests` is green (`DmgScriptTests/makesARealImage` is the known hdiutil flake and passed on rerun).
+
+## Things to know
+- **Not verified visually.** SwiftUI layout has no unit test here, and I did not launch the app unattended (it grabs audio devices and the web port). Layout values were copied unchanged, but please look at the window once.
+- The real-time pieces (`ParameterSnapshot`, the parameter observer) were moved or left alone, not changed.
+
+## Status
+Baseline: 9 -> 5 findings. Left: AudioHost (4), AudioIO (1).
