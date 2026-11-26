@@ -112,26 +112,27 @@ nonisolated struct HTTPResponse: Sendable {
         self.isStreaming = isStreaming
     }
 
+    private static let reasonPhrases: [Int: String] = [
+        200: "OK",
+        201: "Created",
+        202: "Accepted",
+        204: "No Content",
+        400: "Bad Request",
+        401: "Unauthorized",
+        404: "Not Found",
+        405: "Method Not Allowed",
+        409: "Conflict",
+        411: "Length Required",
+        413: "Content Too Large",
+        415: "Unsupported Media Type",
+        431: "Request Header Fields Too Large",
+        500: "Internal Server Error",
+        501: "Not Implemented",
+        503: "Service Unavailable"
+    ]
+
     static func defaultReason(for status: Int) -> String {
-        switch status {
-        case 200: return "OK"
-        case 201: return "Created"
-        case 202: return "Accepted"
-        case 204: return "No Content"
-        case 400: return "Bad Request"
-        case 401: return "Unauthorized"
-        case 404: return "Not Found"
-        case 405: return "Method Not Allowed"
-        case 409: return "Conflict"
-        case 411: return "Length Required"
-        case 413: return "Content Too Large"
-        case 415: return "Unsupported Media Type"
-        case 431: return "Request Header Fields Too Large"
-        case 500: return "Internal Server Error"
-        case 501: return "Not Implemented"
-        case 503: return "Service Unavailable"
-        default: return "Status \(status)"
-        }
+        reasonPhrases[status] ?? "Status \(status)"
     }
 
     /// - Parameter includeBody: false for a `HEAD`, which must carry the headers a `GET` would —
@@ -192,173 +193,5 @@ nonisolated struct HTTPResponse: Sendable {
                                            // copy talking to a newer API is worse than a refetch.
                                            ("Cache-Control", "no-cache")]),
                      body: body)
-    }
-}
-
-/// Incremental HTTP/1.1 request parsing.
-///
-/// Pure and synchronous — it is handed the bytes accumulated so far and says whether a request is
-/// in there yet. That keeps every edge case (split packets, oversized headers, pipelining)
-/// testable without a socket, which is most of why the server is shaped this way.
-nonisolated enum HTTPRequestParser {
-
-    /// Caps, because a listener on the network must not let a peer grow this process's memory by
-    /// simply never sending `\r\n\r\n`.
-    static let maximumHeaderBytes = 16 * 1024
-    static let maximumBodyBytes = 64 * 1024
-
-    enum Outcome {
-        /// Nothing complete yet, and nothing wrong — wait for more bytes.
-        case incomplete
-
-        /// A request, plus how many bytes of the buffer it used, so anything pipelined behind it
-        /// stays in the buffer for the next pass.
-        case complete(HTTPRequest, consumed: Int)
-
-        /// Unparseable or over a cap. The response is ready to send, after which the connection
-        /// has to close: the framing is no longer trustworthy, so the next byte can't be located.
-        case failed(HTTPResponse)
-    }
-
-    static func parse(_ buffer: [UInt8]) -> Outcome {
-        guard let headerEnd = indexAfterHeaderTerminator(in: buffer) else {
-            if buffer.count > maximumHeaderBytes {
-                return .failed(.error(431, "Header block exceeds \(maximumHeaderBytes) bytes",
-                                      closeConnection: true))
-            }
-            return .incomplete
-        }
-
-        if headerEnd > maximumHeaderBytes {
-            return .failed(.error(431, "Header block exceeds \(maximumHeaderBytes) bytes",
-                                  closeConnection: true))
-        }
-
-        guard let headerText = String(bytes: buffer[0..<headerEnd], encoding: .utf8) else {
-            return .failed(.error(400, "Header block is not valid UTF-8", closeConnection: true))
-        }
-
-        // The terminator's own CRLFCRLF is not part of any line.
-        var lines = headerText.components(separatedBy: "\r\n")
-        lines.removeLast(2)
-
-        guard let requestLine = lines.first, !requestLine.isEmpty else {
-            return .failed(.error(400, "Empty request line", closeConnection: true))
-        }
-
-        let parts = requestLine.split(separator: " ", omittingEmptySubsequences: false)
-        guard parts.count == 3 else {
-            return .failed(.error(400, "Malformed request line", closeConnection: true))
-        }
-
-        let method = String(parts[0])
-        let target = String(parts[1])
-        let version = String(parts[2])
-
-        guard version.hasPrefix("HTTP/1.") else {
-            return .failed(.error(505, "Only HTTP/1.x is supported", closeConnection: true))
-        }
-        guard target.hasPrefix("/") else {
-            // Absolute-form targets are only required of proxies, which this is not.
-            return .failed(.error(400, "Request target must be origin-form", closeConnection: true))
-        }
-
-        var headers = HTTPHeaders()
-        for line in lines.dropFirst() {
-            // Obsolete line folding: a continuation begins with whitespace. Deprecated by RFC 9112
-            // and a known request-smuggling vector, so it's rejected rather than reassembled.
-            if line.hasPrefix(" ") || line.hasPrefix("\t") {
-                return .failed(.error(400, "Obsolete header line folding", closeConnection: true))
-            }
-            guard let colon = line.firstIndex(of: ":") else {
-                return .failed(.error(400, "Malformed header line", closeConnection: true))
-            }
-            let name = String(line[line.startIndex..<colon])
-            guard !name.isEmpty, !name.hasSuffix(" "), !name.hasSuffix("\t") else {
-                return .failed(.error(400, "Malformed header name", closeConnection: true))
-            }
-            let value = String(line[line.index(after: colon)...])
-                .trimmingCharacters(in: .whitespaces)
-            headers.append(name, value)
-        }
-
-        // Not supported, and silently ignoring the header would mean misreading the body.
-        if let encoding = headers["Transfer-Encoding"], !encoding.isEmpty {
-            return .failed(.error(411, "Chunked transfer encoding is not supported",
-                                  closeConnection: true))
-        }
-
-        var bodyLength = 0
-        if let raw = headers["Content-Length"] {
-            guard let length = Int(raw.trimmingCharacters(in: .whitespaces)), length >= 0 else {
-                return .failed(.error(400, "Malformed Content-Length", closeConnection: true))
-            }
-            guard length <= maximumBodyBytes else {
-                return .failed(.error(413, "Body exceeds \(maximumBodyBytes) bytes",
-                                      closeConnection: true))
-            }
-            bodyLength = length
-        }
-
-        let total = headerEnd + bodyLength
-        guard buffer.count >= total else { return .incomplete }
-
-        let (path, query) = splitTarget(target)
-
-        return .complete(HTTPRequest(method: method,
-                                     target: target,
-                                     path: path,
-                                     query: query,
-                                     headers: headers,
-                                     body: Data(buffer[headerEnd..<total])),
-                         consumed: total)
-    }
-
-    /// Index one past the `CRLFCRLF` that ends the header block, or nil if it isn't there yet.
-    private static func indexAfterHeaderTerminator(in buffer: [UInt8]) -> Int? {
-        guard buffer.count >= 4 else { return nil }
-        let cr = UInt8(ascii: "\r"), lf = UInt8(ascii: "\n")
-        for index in 0...(buffer.count - 4) where buffer[index] == cr {
-            if buffer[index + 1] == lf, buffer[index + 2] == cr, buffer[index + 3] == lf {
-                return index + 4
-            }
-        }
-        return nil
-    }
-
-    /// Splits an origin-form target into a percent-decoded path and its query parameters.
-    ///
-    /// A path that won't percent-decode keeps its raw form rather than failing the request: it
-    /// will simply match no route and get a 404, which is the right answer for it anyway.
-    static func splitTarget(_ target: String) -> (path: String, query: [String: String]) {
-        let head: Substring
-        let tail: Substring
-        if let mark = target.firstIndex(of: "?") {
-            head = target[target.startIndex..<mark]
-            tail = target[target.index(after: mark)...]
-        } else {
-            head = target[...]
-            tail = ""
-        }
-
-        var query: [String: String] = [:]
-        for pair in tail.split(separator: "&") where !pair.isEmpty {
-            let pieces = pair.split(separator: "=", maxSplits: 1)
-            let name = percentDecoded(String(pieces[0]), plusIsSpace: true)
-            let value = pieces.count > 1
-                ? percentDecoded(String(pieces[1]), plusIsSpace: true)
-                : ""
-            query[name] = value
-        }
-
-        return (percentDecoded(String(head), plusIsSpace: false), query)
-    }
-
-    /// - Parameter plusIsSpace: `+` means a space in `application/x-www-form-urlencoded` query
-    ///   strings but is a literal `+` in a path. Decoding both the same way is the usual source
-    ///   of that bug, so the caller has to say which one it has.
-    private static func percentDecoded(_ text: String, plusIsSpace: Bool) -> String {
-        let prepared = plusIsSpace ? text.replacingOccurrences(of: "+", with: " ") : text
-        return prepared.removingPercentEncoding ?? prepared
     }
 }
