@@ -129,7 +129,7 @@ struct WebServerSettings: Codable, Equatable {
     var requiresAuthentication = false
 
     var unauthedLocalhostAllowed = true
-    
+
     var username = ""
     // Password is stored in keychain
 

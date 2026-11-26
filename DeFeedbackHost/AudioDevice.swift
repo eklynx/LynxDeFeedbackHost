@@ -48,7 +48,6 @@ enum AudioHardware {
         Int(dfh_device_channel_count(id, input))
     }
 
-
     // MARK: - Sample rate
 
     /// Nominal Sample Rate is the current sample rate of the device.
@@ -69,7 +68,6 @@ enum AudioHardware {
         }
         return Array(storage.prefix(count))
     }
-
 
     // MARK: - Buffer frame size
 
@@ -99,7 +97,6 @@ enum AudioHardware {
         let actual = dfh_device_set_buffer_frame_size(id, Int32(frames))
         return actual > 0 ? Int(actual) : nil
     }
-
 
     // MARK: - Helpers
 

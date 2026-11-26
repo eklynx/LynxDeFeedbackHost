@@ -32,7 +32,7 @@ enum AudioHostError: LocalizedError {
         switch self {
         case .pluginNotInstalled:
             return String(
-                format:String(localized: locKeyErrPluginNotFoundFormat,
+                format: String(localized: locKeyErrPluginNotFoundFormat,
                               table: locTableErrors),
                 PluginConfiguration.displayName)
         case .noDeviceSelected:
@@ -45,19 +45,19 @@ enum AudioHostError: LocalizedError {
             return String(localized: locKeyErrHalComponentUnavailableFormat, table: locTableErrors)
         case .sampleRateUnavailable(let name):
             return String(
-                format:String(localized: locKeyErrSampleRateUnavailableFormat,
+                format: String(localized: locKeyErrSampleRateUnavailableFormat,
                               table: locTableErrors),
                 name)
         case .sampleRateMismatch(let input, let output):
             return String(
-                format:String(localized: locKeyErrSampleRateMismatchErrFormat,
+                format: String(localized: locKeyErrSampleRateMismatchErrFormat,
                               table: locTableErrors),
                 input,
                 output
             )
         case .sampleRateNotApplied(let name, let rate):
             return String(
-                format:String(localized: locKeyErrSampleRateNotAppliedFormat,
+                format: String(localized: locKeyErrSampleRateNotAppliedFormat,
                               table: locTableErrors),
                 name,
                 rate
@@ -65,7 +65,7 @@ enum AudioHostError: LocalizedError {
         case .bufferSizeNotApplied(let name, let requested, let actual):
             if let actual {
                 return String(
-                    format:String(localized: locKeyErrBufferSizeNotAppliedFormatActualGiven,
+                    format: String(localized: locKeyErrBufferSizeNotAppliedFormatActualGiven,
                                   table: locTableErrors),
                     name,
                     requested,
@@ -73,19 +73,19 @@ enum AudioHostError: LocalizedError {
                 )
             }
             return String(
-                format:String(localized: locKeyErrBufferSizeNotAppliedFormatNoActualGiven,
+                format: String(localized: locKeyErrBufferSizeNotAppliedFormatNoActualGiven,
                               table: locTableErrors),
                 name,
                 requested
             )
         case .maxInstancesReached:
             return String(
-                format:String(localized: locKeyErrMaxInstancesReachedFormat,
+                format: String(localized: locKeyErrMaxInstancesReachedFormat,
                               table: locTableErrors),
                 PluginConfiguration.maximumInstanceCount)
         case .coreAudio(let what, let status):
             return String(
-                format:String(localized: locKeyErrCoreAudioErrFormat,
+                format: String(localized: locKeyErrCoreAudioErrFormat,
                           table: locTableErrors),
             status,
             what)
@@ -102,7 +102,6 @@ enum AudioHostError: LocalizedError {
 @MainActor
 final class AudioHost {
 
-    
     @ObservationIgnored private let defaults: UserDefaults
 
     /// - Parameter defaults: defaults to the standard user defaults, can be overridden here for test running purposes.
@@ -113,7 +112,6 @@ final class AudioHost {
         self.pluginAvailabilityOverride = pluginInstalled != nil
     }
 
-    
     // MARK: - Plugin availability
 
     /// Whether the configured Audio Unit is registered with the system.
@@ -144,7 +142,6 @@ final class AudioHost {
         }
     }
 
-    
     // MARK: - Devices
 
     private(set) var inputDevices: [AudioDevice] = []
@@ -261,7 +258,6 @@ final class AudioHost {
         settingsChanged()
     }
 
-    
     // MARK: - Sample rates
 
     private(set) var inputSampleRates: [Double] = []
@@ -427,7 +423,6 @@ final class AudioHost {
             }
         }
     }
-    
 
     // MARK: - Buffer size
 
@@ -474,7 +469,6 @@ final class AudioHost {
         }
         return names
     }
-
 
     // MARK: - Launch at login and crash restart
     //
@@ -549,7 +543,6 @@ final class AudioHost {
         didSet { settingsChanged() }
     }
 
-
     var newInstancesMuted = false {
         didSet { settingsChanged() }
     }
@@ -558,14 +551,12 @@ final class AudioHost {
         didSet { settingsChanged() }
     }
 
-    
     // MARK: - Web control endpoint
 
     var webServerSettings = WebServerSettings() {
         didSet { settingsChanged() }
     }
 
-    
     // MARK: - ServiceState
 
     private(set) var isRunning = false
@@ -605,7 +596,6 @@ final class AudioHost {
         return nil
     }
 
-    
     // MARK: - Instances
 
     private(set) var instances: [PluginInstance] = []
@@ -627,7 +617,6 @@ final class AudioHost {
         isPluginInstalled && instances.count < PluginConfiguration.maximumInstanceCount
     }
 
-    
     // MARK: - Private state
 
     @ObservationIgnored private var engineController: CoreAudioEngineControl?
@@ -649,7 +638,6 @@ final class AudioHost {
     /// How long an long to delay the auto-start to make sure it only tries once.
     private static let autoResumeDelay: Duration = .milliseconds(500)
 
-    
     // MARK: - Persistence state
 
     /// flag that marks a settings change event.
@@ -663,7 +651,6 @@ final class AudioHost {
     @ObservationIgnored private var autosaveTask: Task<Void, Never>?
     @ObservationIgnored private var appTerminationObserver: NSObjectProtocol?
 
-    
     // MARK: - Load State
 
     func loadApplicationState() async {
@@ -769,7 +756,6 @@ final class AudioHost {
                                     max(0, instances.count - 1))
     }
 
-
     nonisolated static func restoredNames(_ saved: [String?]) -> [String] {
         var kept: [String?] = []
         for candidate in saved {
@@ -790,7 +776,6 @@ final class AudioHost {
         }
     }
 
-    
     // MARK: - Save Settings
 
     // MARK: - External preference changes (defaults write)
@@ -906,7 +891,6 @@ final class AudioHost {
             webServer: webServerSettings)
     }
 
-
     private func saveOnTermination() {
         appTerminationObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification,
@@ -965,7 +949,6 @@ final class AudioHost {
             """ // TODO: localize string
     }
 
-
     private func resumeIfDevicesReturned() {
         guard resumeWhenDevicesReturn, !isRunning, canStart, autoResumeTask == nil else { return }
 
@@ -974,22 +957,20 @@ final class AudioHost {
             guard let self else { return }
 
             self.autoResumeTask = nil
-            
+
             // recheck right before start in case device is lost again (i.e. bad cable)
             guard self.resumeWhenDevicesReturn, !self.isRunning, self.canStart else { return }
-            
+
             self.resumeWhenDevicesReturn = false
             await self.start()
         }
     }
 
-    
     // MARK: - Run / Stop
 
     func toggleRunning() async {
         if isRunning { stop() } else { await start() }
     }
-
 
     func start() async {
         guard !isRunning else { return }
@@ -1033,7 +1014,6 @@ final class AudioHost {
             throw AudioHostError.microphoneAccessDenied
         }
 
-
         guard let inputRate = selectedInputSampleRate,
               let outputRate = selectedOutputSampleRate else {
             throw AudioHostError.sampleRateUnavailable(output.name)
@@ -1042,7 +1022,6 @@ final class AudioHost {
             throw AudioHostError.sampleRateMismatch(input: inputRate, output: outputRate)
         }
         let sampleRate = outputRate
-
 
         for direction in AudioDirection.allCases {
             let device = direction == .input ? input : output
@@ -1072,7 +1051,6 @@ final class AudioHost {
 
         let maximumFrameCount = bufferSize
 
-        
         // Setup the audio engine
         guard let controller = CoreAudioEngineControl(maximumFrameCount: maximumFrameCount,
                                         inputChannelCount: input.inputChannelCount,
@@ -1149,7 +1127,6 @@ final class AudioHost {
         engineController = nil
         runningSampleRate = 0
     }
-
 
     // MARK: - Instances
 
@@ -1259,7 +1236,6 @@ final class AudioHost {
         retire(instance)
     }
 
-
     private func activateInstance(_ instance: PluginInstance, in engine: CoreAudioEngineControl) throws {
         guard let slot = engine.claimSlot() else { throw AudioHostError.maxInstancesReached }
 
@@ -1291,7 +1267,6 @@ final class AudioHost {
         }
     }
 
-    
     // MARK: - Diagnostics
 
     struct Diagnostics {
@@ -1347,7 +1322,6 @@ final class AudioHost {
             parallelRenderingEngaged: engineController.isParallelRenderingEngaged)
     }
 
-    
     // MARK: - Gallery View Controller
 
     func showPreviousInstance() {

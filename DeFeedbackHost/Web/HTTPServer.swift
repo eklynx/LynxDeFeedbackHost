@@ -301,8 +301,7 @@ nonisolated final class HTTPConnection: @unchecked Sendable {
     // MARK: - Reading
 
     private func receive() {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 16 * 1024) {
-            [weak self] data, _, isComplete, error in
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 16 * 1024) { [weak self] data, _, isComplete, error in
             guard let self else { return }
 
             if let error {

@@ -98,7 +98,6 @@ struct ContentView: View {
         }
     }
 
-
     private var deviceGrid: some View {
         Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
             GridRow {
@@ -214,7 +213,6 @@ struct ContentView: View {
         return lines.joined(separator: "\n")
     }
 
-
     private var parallelRenderingHelp: String {
         """
         Enable Parallel rendering between multiple worker threads.
@@ -275,7 +273,7 @@ struct ContentView: View {
 
         var lines = [
             "DSP load history:",
-            "Peak so far: \(percent(diagnostics.peakDspLoad)). Underruns: \(diagnostics.underruns).",
+            "Peak so far: \(percent(diagnostics.peakDspLoad)). Underruns: \(diagnostics.underruns)."
         ]
         if let render = diagnostics.renderThreadPolicy {
             lines.append("Render thread: \(render.summary).")

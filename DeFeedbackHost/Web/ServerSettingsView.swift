@@ -86,7 +86,6 @@ struct ServerSettingsView: View {
         }
     }
 
-
     // MARK: - Bindings
 
     private var enabledBinding: Binding<Bool> {
@@ -128,7 +127,6 @@ struct ServerSettingsView: View {
         }
     }
 
-
     // MARK: - Applying
 
     private func applyPort() {
@@ -149,7 +147,6 @@ struct ServerSettingsView: View {
         KeychainPassword.write(password)
         web.reconcile()
     }
-
 
     // MARK: - Status
 
@@ -176,7 +173,6 @@ struct ServerSettingsView: View {
                 .foregroundStyle(.secondary)
         }
     }
-
 
     @ViewBuilder
     private var securityFooter: some View {

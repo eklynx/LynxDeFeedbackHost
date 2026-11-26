@@ -45,7 +45,7 @@ nonisolated final class EventStream: @unchecked Sendable {
                      headers: HTTPHeaders([
                         ("Content-Type", "text/event-stream; charset=utf-8"),
                         ("Cache-Control", "no-store"),
-                        ("X-Accel-Buffering", "no"),
+                        ("X-Accel-Buffering", "no")
                      ]),
                      isStreaming: true)
     }
@@ -95,7 +95,7 @@ nonisolated final class EventStream: @unchecked Sendable {
     // MARK: - Sending
 
     func broadcast(event: String, json: Data) {
-        let frame = Self.frame(event: event, data: String(decoding: json, as: UTF8.self))
+        let frame = Self.frame(event: event, data: String(bytes: json, encoding: .utf8) ?? "")
         send(frame)
     }
 
