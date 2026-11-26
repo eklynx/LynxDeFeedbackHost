@@ -5,6 +5,7 @@ import streamDeck, {
 	SingletonAction,
 	WillAppearEvent
 } from "@elgato/streamdeck";
+import type {JsonObject} from "@elgato/utils";
 import {formatNamed} from './helpers.js';
 
 import fs from 'fs';
@@ -62,7 +63,7 @@ export class Strength extends SingletonAction<StrengthSettings> {
 		return this.updateActionFromEvent(ev, globalSettings);
 	}
 
-	public static async updateActionFromExternal(action:KeyAction|DialAction, globalSettings:GlobalSettings) {
+	public static async updateActionFromExternal(action:KeyAction<JsonObject>|DialAction<JsonObject>, globalSettings:GlobalSettings) {
 		// This action's own settings are cached from willAppear/didReceiveSettings: asking the Stream Deck app
 		// for them each refresh costs a round trip and makes it answer with another didReceiveSettings event.
 		const settings:StrengthSettings = actionSettings.get(action.id) ?? await action.getSettings()
@@ -75,7 +76,7 @@ export class Strength extends SingletonAction<StrengthSettings> {
 		return Strength.updateActionWithSettings(ev.action, settings, globalSettings, dedupe);
 	}
 
-	private static async updateActionWithSettings(action:KeyAction|DialAction, settings:StrengthSettings, globalSettings: GlobalSettings, dedupe = false) {
+	private static async updateActionWithSettings(action:KeyAction<JsonObject>|DialAction<JsonObject>, settings:StrengthSettings, globalSettings: GlobalSettings, dedupe = false) {
 		let targetStrength: number | null = Number(settings.strengthPercent)
 		const instanceName = settings.instanceName;
 
@@ -98,7 +99,7 @@ export class Strength extends SingletonAction<StrengthSettings> {
 		}
 	}
 
-	private static async updateActionImage(action:KeyAction|DialAction, instanceName:string, targetStrength: number | null, globalSettings:GlobalSettings) {
+	private static async updateActionImage(action:KeyAction<JsonObject>|DialAction<JsonObject>, instanceName:string, targetStrength: number | null, globalSettings:GlobalSettings) {
 		globalSettings = withEncoderEdits(globalSettings);
 		const currentStrength = globalSettings.instances?.[instanceName]?.strength ?? -1;
 		const isBypassed = globalSettings.instances?.[instanceName]?.isBypassed ?? false;
@@ -110,7 +111,7 @@ export class Strength extends SingletonAction<StrengthSettings> {
 		await action.setTitle(instanceName ?? "???");
 	}
 
-	private static async updateActionEncoder(action: DialAction, instanceName:string, globalSettings:GlobalSettings, dedupe = false) {
+	private static async updateActionEncoder(action: DialAction<JsonObject>, instanceName:string, globalSettings:GlobalSettings, dedupe = false) {
 		// Whatever snapshot we were handed, show the dial's freshest value (a stale refresh must never move it backwards).
 		globalSettings = withEncoderEdits(globalSettings);
 		const currentStrength = globalSettings.instances?.[instanceName]?.strength ?? -1;
@@ -277,11 +278,11 @@ const lastTitle = new Map<string, string>();
  * stop; the run-on did not change, so it is kept short for responsiveness.)
  */
 export const FEEDBACK_MIN_INTERVAL_MS = 33;
-type FeedbackPayload = Parameters<DialAction["setFeedback"]>[0];
+type FeedbackPayload = Parameters<DialAction<JsonObject>["setFeedback"]>[0];
 const lastFeedbackAt = new Map<string, number>();
-const feedbackLimiter = new Map<string, { timer?: NodeJS.Timeout; pending?: { action: DialAction; feedback: FeedbackPayload; key: string } }>();
+const feedbackLimiter = new Map<string, { timer?: NodeJS.Timeout; pending?: { action: DialAction<JsonObject>; feedback: FeedbackPayload; key: string } }>();
 
-function sendFeedbackLimited(action: DialAction, feedback: FeedbackPayload, key: string): void {
+function sendFeedbackLimited(action: DialAction<JsonObject>, feedback: FeedbackPayload, key: string): void {
 	let state = feedbackLimiter.get(action.id);
 	if (!state) {
 		state = {};

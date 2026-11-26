@@ -1,11 +1,12 @@
 import streamDeck, {
 	action,
 	DidReceiveSettingsEvent,
-	JsonObject, KeyAction,
+	KeyAction,
 	KeyDownEvent,
 	SingletonAction,
 	WillAppearEvent
 } from "@elgato/streamdeck";
+import type {JsonObject} from "@elgato/utils";
 import {formatNamed} from './helpers.js';
 
 import fs from 'fs';
@@ -55,21 +56,21 @@ export class Bypass extends SingletonAction<BypassSettings> {
 
 
 	private static async updateActionFromEvent(ev: WillAppearEvent<BypassSettings> | DidReceiveSettingsEvent<BypassSettings> | KeyDownEvent<BypassSettings>, globalSettings:GlobalSettings) {
-		return Bypass.updateActionFromSettings(ev.action as KeyAction, ev.payload.settings, globalSettings);
+		return Bypass.updateActionFromSettings(ev.action as KeyAction<JsonObject>, ev.payload.settings, globalSettings);
 	}
 
-	public static async updateActionFromExternal(action: KeyAction, globalSettings:GlobalSettings) {
+	public static async updateActionFromExternal(action: KeyAction<JsonObject>, globalSettings:GlobalSettings) {
 		return Bypass.updateActionFromSettings(action, await action.getSettings(), globalSettings);
 	}
 
-	private static async updateActionFromSettings(action:KeyAction, settings: BypassSettings, globalSettings:GlobalSettings) {
+	private static async updateActionFromSettings(action:KeyAction<JsonObject>, settings: BypassSettings, globalSettings:GlobalSettings) {
 		if (settings.instanceName == null) {
 			return;
 		}
-		await Bypass.updateActionImage(action as KeyAction, settings.instanceName, globalSettings)
+		await Bypass.updateActionImage(action as KeyAction<JsonObject>, settings.instanceName, globalSettings)
 	}
 
-	private static async updateActionImage(action:KeyAction, instanceName:string, globalSettings:GlobalSettings) {
+	private static async updateActionImage(action:KeyAction<JsonObject>, instanceName:string, globalSettings:GlobalSettings) {
 		const isBypassed: boolean = globalSettings.instances?.[instanceName]?.isBypassed ?? false;
 		const isUnknown: boolean = !globalSettings.instances?.[instanceName];
 		const isDisconnected: boolean = !(getConnector()?.isConnected as boolean ?? false)
