@@ -66,7 +66,6 @@ nonisolated final class CoreAudioEngineControl: @unchecked Sendable {
         dfh_engine_destroy(engine)
     }
 
-    
     // MARK: - Configuration
 
     var maximumFrameCount: Int { Int(dfh_engine_maximum_frame_count(engine)) }
@@ -96,7 +95,6 @@ nonisolated final class CoreAudioEngineControl: @unchecked Sendable {
         dfh_engine_write_input(engine, bufferList.unsafePointer, Int32(frameCount))
     }
 
-    
     // MARK: - Slots
 
     /// Claims an empty slot, or `nil` if table is full.
@@ -135,7 +133,6 @@ nonisolated final class CoreAudioEngineControl: @unchecked Sendable {
         dfh_engine_release_slot(engine, slot.handle)
     }
 
-    
     // MARK: - Parallel rendering
 
     func setParallelRendering(_ enabled: Bool, instanceThreshold: Int) {
@@ -163,7 +160,6 @@ nonisolated final class CoreAudioEngineControl: @unchecked Sendable {
         }
     }
 
-    
     // MARK: - Realtime seams
 
     /// Drives one render cycle. Production goes straight from CoreAudio into C++; this exists so
@@ -180,7 +176,6 @@ nonisolated final class CoreAudioEngineControl: @unchecked Sendable {
         dfh_engine_input_channel(engine, Int32(channel))
     }
 
-    
     // MARK: - Diagnostics
 
     var captureCycles: UInt64 { dfh_engine_capture_cycles(engine) }

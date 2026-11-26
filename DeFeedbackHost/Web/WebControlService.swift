@@ -70,7 +70,6 @@ enum WebErrorStrings: String {
     case StrengthDescriptionSuffix = "a whole percentage from 0 to 100"
     case ChannelDescriptionSuffix = "a valid 0-based channel number"
 
-    
     // MARK: - Parameterized errors
     static func pageNotFound(path: String) -> String {
         "Page not found: \(path)"
@@ -181,7 +180,6 @@ final class WebControlService {
 
     @ObservationIgnored private var cachedIndexPage: Data?
 
-    
     // MARK: - Observable state, for the settings window
 
     private(set) var state: HTTPServer.State = .stopped
@@ -233,7 +231,6 @@ final class WebControlService {
         }
     }
 
-    
     // MARK: - Lifecycle
 
     func reconcile() {
@@ -245,7 +242,7 @@ final class WebControlService {
             state = .failed(WebErrorStrings.ServiceDisabled.rawValue)
             return
         }
-        
+
         let authValid = settings.isAuthenticationComplete
             && (!settings.requiresAuthentication
                 || !password.isEmpty)
@@ -314,14 +311,11 @@ final class WebControlService {
         state = .stopped
     }
 
-    
     // MARK: - Endpoints
-
 
     // endpoint routing
     private func routeEndpoint(_ request: HTTPRequest) async -> HTTPServer.RouteOutcome {
 
-        
         if let id = Self.extractPathFromTemplate(in: request.path, matching: "/api/instances/{id}") {
             switch request.method {
             case "GET", "HEAD":
@@ -456,7 +450,6 @@ final class WebControlService {
         return .json(statusPayload(), status: 202)
     }
 
-
     private func setDevices(_ request: HTTPRequest) -> HTTPResponse {
         guard let body = decodeJSONBody(request) else {
             return .error(415, WebErrorStrings.WrongContentType.rawValue)
@@ -502,7 +495,6 @@ final class WebControlService {
         return .json(statusPayload(), status: 202)
     }
 
-
     private func setSampleRate(_ request: HTTPRequest) -> HTTPResponse {
         guard let body = decodeJSONBody(request) else {
             return .error(415, WebErrorStrings.WrongContentType.rawValue)
@@ -544,7 +536,6 @@ final class WebControlService {
         return .json(statusPayload(), status: 202)
     }
 
-
     private func setBufferSize(_ request: HTTPRequest) -> HTTPResponse {
         guard let body = decodeJSONBody(request) else {
             return .error(415, WebErrorStrings.WrongContentType.rawValue)
@@ -575,7 +566,6 @@ final class WebControlService {
         pushStatus(force: true)
         return .json(statusPayload(), status: 202)
     }
-
 
     /// Adds an instance of the plugin.
     ///
@@ -610,7 +600,6 @@ final class WebControlService {
         let encoded = name.addingPercentEncoding(withAllowedCharacters: segment) ?? name
         return "/api/instances/\(encoded)"
     }
-
 
     /// Removes an instance of the plugin.
     private func removeInstance(id text: String) -> HTTPResponse {
@@ -741,8 +730,8 @@ final class WebControlService {
 
     /// Validates a sample rate is valid for the device.
     private func validateRate(_ value: Any?,
-                             requestedRate: [Double],
-                             direction: String) -> CheckedValue<Double> {
+                              requestedRate: [Double],
+                              direction: String) -> CheckedValue<Double> {
         guard let number = value as? NSNumber else {
             return .rejected(.error(400, WebErrorStrings.rateMustBeHertz(direction: direction)))
         }
@@ -764,8 +753,8 @@ final class WebControlService {
     }
 
     private func verifyInteger(_ value: Any?,
-                                named name: String,
-                                mustBe description: WebErrorStrings) -> CheckedValue<Int> {
+                               named name: String,
+                               mustBe description: WebErrorStrings) -> CheckedValue<Int> {
         guard let number = value as? NSNumber,
               CFGetTypeID(number) != CFBooleanGetTypeID() else {
             return .rejected(.error(400, WebErrorStrings.fieldMustBe(name, description)))
@@ -777,11 +766,10 @@ final class WebControlService {
         return .verifiedValue(whole)
     }
 
-
     private func verifyChannel(_ value: Any?,
-                                named name: String,
-                                available: Int,
-                                direction: String) -> CheckedValue<Int> {
+                               named name: String,
+                               available: Int,
+                               direction: String) -> CheckedValue<Int> {
         switch verifyInteger(value, named: name, mustBe: .ChannelDescriptionSuffix) {
         case .rejected(let response):
             return .rejected(response)
@@ -821,7 +809,6 @@ final class WebControlService {
         return dictionary
     }
 
-    
     // MARK: - Status
 
     /// gets the status of the host.  All values are retrieved from the host even if they could be calculated locally.
@@ -834,7 +821,7 @@ final class WebControlService {
             "version": status.availableVersion ?? NSNull(),
             "channel": status.channel.rawValue,
             "releasesURL": status.releasesPage.absoluteString,
-            "releaseNotesURL": status.releaseNotesURL.absoluteString,
+            "releaseNotesURL": status.releaseNotesURL.absoluteString
         ]
     }
 
@@ -888,12 +875,12 @@ final class WebControlService {
             "underruns": diagnostics?.underruns ?? 0,
             "hasRendered": diagnostics?.hasRendered ?? false,
             "realtime": diagnostics?.audioThreadsAreRealtime ?? true,
-            "error": host.errorMessage ?? NSNull(),
+            "error": host.errorMessage ?? NSNull()
         ]
     }
 
     private static func getDeviceList(_ devices: [AudioDevice],
-                                 channels: KeyPath<AudioDevice, Int>) -> [[String: Any]] {
+                                      channels: KeyPath<AudioDevice, Int>) -> [[String: Any]] {
         devices.map { device in
             ["uid": device.uid,
              "name": device.name,
@@ -917,7 +904,7 @@ final class WebControlService {
             "bypassed": instance.isBypassed,
             "inputChannel": instance.inputChannel,
             "outputChannel": instance.outputChannel,
-            "error": instance.loadError ?? NSNull(),
+            "error": instance.loadError ?? NSNull()
         ]
     }
 

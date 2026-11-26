@@ -58,7 +58,7 @@ struct AppWarning: Equatable, Sendable {
             "kind": kind.rawValue,
             "message": message,
             "link": link?.absoluteString ?? NSNull(),
-            "linkTitle": linkTitle ?? NSNull(),
+            "linkTitle": linkTitle ?? NSNull()
         ]
     }
 }

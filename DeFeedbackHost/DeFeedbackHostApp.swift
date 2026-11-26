@@ -8,7 +8,6 @@
 import SwiftUI
 import os
 
-
 extension Logger {
     private static var subsystem = Bundle.main.bundleIdentifier ?? "com.eklynx.sound.DeFeedbackHost"
 
@@ -17,7 +16,6 @@ extension Logger {
     static let audio = Logger(subsystem: subsystem, category: "Audio")
     static let webserver = Logger(subsystem: subsystem, category: "WebServer")
 }
-
 
 @main
 struct DeFeedbackHostApp: App {

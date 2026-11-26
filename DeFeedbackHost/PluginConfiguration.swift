@@ -48,12 +48,10 @@ nonisolated enum PluginConfiguration {
 
     static let notInstalledMessage = "The \(displayName) plugin is not installed. Please install it." // TODO: localize string
 
-
     static var isInstalled: Bool {
         var description = componentDescription
         return AudioComponentFindNext(nil, &description) != nil
     }
-
 
     /// Gets the plugin details, nil if it doesnt exist.
     static var installedPlugin: InstalledPlugin? {
@@ -85,7 +83,6 @@ nonisolated enum PluginConfiguration {
     static let componentDirectories = ["/Library/Audio/Plug-Ins/Components",
                                        NSHomeDirectory() + "/Library/Audio/Plug-Ins/Components"]
 
-
     /// Gets the copywrite string for the bundle, nil if it doesnt exist.
     static func bundleCopyright(type: OSType = componentType,
                                 subType: OSType = componentSubType,
@@ -113,9 +110,9 @@ nonisolated enum PluginConfiguration {
 
     /// Checks if the specified bundle matches the criteria we're looking for.
     private static func doesBundleMatch(_ bundle: Bundle,
-                                       _ type: OSType,
-                                       _ subType: OSType,
-                                       _ manufacturer: OSType) -> Bool {
+                                        _ type: OSType,
+                                        _ subType: OSType,
+                                        _ manufacturer: OSType) -> Bool {
         let bundleDeclaration = bundle.object(forInfoDictionaryKey: "AudioComponents") as? [[String: Any]]
         return bundleDeclaration?.contains { entry in
             entry["type"] as? String == os4CharToString(type)

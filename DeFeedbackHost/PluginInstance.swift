@@ -195,12 +195,10 @@ final class PluginInstance: Identifiable {
         return name
     }
 
-    
     // MARK: - Watched plugin parameters
 
     nonisolated static let strengthParameterName = "Strength"
     nonisolated static let muteParameterName = "Mute"
-
 
     var strengthPercent: Int? {
         guard let value = strengthSnapshot.value else { return nil }
@@ -212,7 +210,6 @@ final class PluginInstance: Identifiable {
         // The plugin gets to define its range, so high half is on, low half is off.
         return value >= mute.lowest + mute.span / 2
     }
-
 
     /// Sets the strength parameter, returns true if set, false if the plugin doesnt have a 'Strength'
     /// parameter
@@ -295,21 +292,20 @@ final class PluginInstance: Identifiable {
     }
 
     nonisolated static func percentFromAUValue(of value: AUValue,
-                                    from lowest: AUValue,
-                                    span: AUValue) -> Int {
+                                               from lowest: AUValue,
+                                               span: AUValue) -> Int {
         guard span > 0 else { return 0 }
         let fraction = (value - lowest) / span
         return min(100, max(0, Int((fraction * 100).rounded())))
     }
 
     nonisolated static func auValueFromPercent(forPercent percent: Int,
-                                  from lowest: AUValue,
-                                  span: AUValue) -> AUValue {
+                                               from lowest: AUValue,
+                                               span: AUValue) -> AUValue {
         let clamped = min(100, max(0, percent))
         return lowest + span * AUValue(clamped) / 100
     }
 
-    
     // MARK: - Persistable plugin state
 
     var pluginState: [String: Any]? {
@@ -365,7 +361,6 @@ final class PluginInstance: Identifiable {
         parameterObserverToken = nil
     }
 
-    
     // MARK: - Loading
 
     /// Loads a plugin instance from stored values
@@ -433,7 +428,6 @@ final class PluginInstance: Identifiable {
         }
     }
 
-    
     // MARK: - Attaching to the engine
 
     /// Connects the AUv2 plugin to the render thread using the C++ engine.

@@ -40,7 +40,7 @@ nonisolated enum BasicAuth {
 
         // RFC 7617 says UTF-8; some clients send Latin-1. Fallback instead of reject outright.
         let text = String(data: decoded, encoding: .utf8)
-            ?? String(decoding: decoded, as: UTF8.self)
+            ?? String(bytes: decoded, encoding: .isoLatin1) ?? ""
 
         // The password may itself contain a colon; the username may not.
         guard let separator = text.firstIndex(of: ":") else { return nil }
@@ -59,7 +59,6 @@ nonisolated enum BasicAuth {
         // assures equal processing time.
         return provided.username == username && provided.password == password
     }
-
 
     /// The 401 that makes a browser prompt for credentials.
     static func challenge() -> HTTPResponse {

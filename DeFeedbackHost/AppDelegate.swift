@@ -9,7 +9,6 @@ import AppKit
 import ServiceManagement
 import os
 
-
 /// Owns the process-lifetime services and enforces launch policy: single instance, hand-off to the
 /// launchd supervisor for crash restarts, and clean exit codes. The rules live in
 /// `Lifecycle/LaunchSupervision.swift` (source of truth); this class only applies the decision.

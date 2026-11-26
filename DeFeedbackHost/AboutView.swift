@@ -85,7 +85,7 @@ struct AboutView: View {
                     .padding(.vertical, 12)
 
                 pluginSection
-                
+
                 Divider()
                     .padding(.vertical, 12)
 
