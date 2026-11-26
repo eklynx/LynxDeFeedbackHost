@@ -405,7 +405,7 @@ struct NightlyScriptTests {
     func callersInheritSecrets() throws {
         // Found by the first dry run through the shared build: the certificate secret was empty until
         // the callers passed `secrets: inherit`. Pinned so a refactor can't silently drop it.
-        for path in [".github/workflows/release.yml", ".github/workflows/nightly.yml"] {
+        for path in [".github/workflows/release.yml", ".github/workflows/nightly.yml", ".github/workflows/prerelease.yml"] {
             let caller = try text(path)
             let build = try #require(caller.components(separatedBy: "uses: ./.github/workflows/build-and-publish.yml").last?
                 .components(separatedBy: "\n  prune:\n").first)
