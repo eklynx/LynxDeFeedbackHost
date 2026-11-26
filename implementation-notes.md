@@ -358,3 +358,20 @@ DeFeedbackHost/
 
 ## Status
 Baseline entries unchanged in number (5); AudioHost's numbers shrank. Next: C2 instance list.
+
+# Lint cleanup: AudioHost split, step C2 (issue #41, PR C2)
+
+## What I changed in C2
+`Host/Instances/InstanceList.swift` now owns the instance list: `instances`, the selected index, add / remove / rename / validate / lookup, restore from settings (`restoredNames` moved with it; its test call is renamed), the engine slot activate/retire, and paging. It talks back through a documented `InstanceListHost` protocol (channel counts, new-instance mute/bypass defaults, plugin installed, the live engine, running sample rate, `errorMessage`, `settingsChanged`). `AudioHost` forwards every member it had, so no caller changed. `settingsChanged()` and a new `liveEngine` accessor became internal to satisfy the protocol.
+
+## How I kept behaviour the same
+- Wrote `InstanceListCharacterizationTests` for what `WebInstanceListTests` didn't cover (channel defaults, the refusal messages, the 32 cap, paging bounds, which instance stays selected after a removal, stale saved selection) and ran them on the OLD code. Every other instance behaviour already had tests (removal by id, rename rules, lookup by id/name, restored names).
+- Full `DeFeedbackHostTests` green (the hdiutil flake passed on rerun).
+
+## Things to know
+- **A quirk I kept and pinned:** `showNextInstance()` on an empty list sets the index to -1. The window never offers the chevron then.
+- **A correction to my own plan:** SwiftLint's `file_length` is a *warning at 400 lines* and an error at 1000, and it counts comments and blank lines. I had been aiming at 1000. To clear the baseline entry `AudioHost.swift` has to get under 400 lines in total, not just the class body under 350. After C1-C4 I expect the forwarding properties to need their own file per collaborator (`AudioHost+Instances.swift` etc.): extensions are fine for pure forwarding to a collaborator, since the logic and the coupling already live in the extracted type.
+- State after C2: class body 800 -> 672 counted lines, file 1144 -> 971 lines.
+
+## Status
+Baseline entries unchanged in number (5); AudioHost's numbers keep shrinking. Next: C3 engine session (needs your hear-test), then C4 device selection.
