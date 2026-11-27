@@ -155,12 +155,24 @@ struct StreamDeckPluginServiceTests {
                 "incompatibility doesn't need the packaged version")
     }
 
-    @Test("SP6: an equal or newer installed plugin, or an unknown packaged version, gives no warning")
+    @Test("SP6: an equal installed plugin, or an unknown packaged version, gives no warning")
     func currentNeverWarns() async {
-        for (installed, packaged) in [("0.1.2.0", "0.1.2.0"), ("0.3.0.0", "0.1.2.0"), ("0.1.2.0", nil)] as [(String, String?)] {
+        for (installed, packaged) in [("0.1.2.0", "0.1.2.0"), ("0.1.2.0", nil)] as [(String, String?)] {
             let plugin = await service(installed: installed, packaged: packaged)
             #expect(plugin.warnings.isEmpty, "\(installed) vs \(packaged ?? "unknown")")
         }
+    }
+
+    @Test("SP17: an installed plugin newer than the packaged one warns and points at Install/Update in Settings")
+    func newerThanPackagedWarns() async throws {
+        let plugin = await service(installed: "0.3.0.4", packaged: "0.2.1.0")
+        #expect(plugin.status == .newerThanPackaged(installed: PluginVersion("0.3.0.4")!, packaged: PluginVersion("0.2.1.0")!))
+        #expect(plugin.warnings.map(\.id) == [StreamDeckPluginService.newerThanPackagedID])
+        let warning = try #require(plugin.warnings.first)
+        #expect(warning.severity == .warning)
+        #expect(warning.message.contains("0.3.0.4") && warning.message.contains("0.2.1.0"))
+        #expect(warning.message.contains("Install/Update"), "\(warning.message)")
+        #expect(plugin.installedVersion == PluginVersion("0.3.0.4"))
     }
 
     @Test("SP8: a refresh after the user installs the new plugin clears the warning")

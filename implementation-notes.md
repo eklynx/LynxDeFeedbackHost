@@ -604,3 +604,13 @@ Built in parallel against the Phase 0 contract (#31 system, #30 API, #32 web pag
 - **Gotcha found while testing:** `streamdeck pack` minifies the manifest onto one line, so `verify-release.sh` reads it with `plutil -extract Version raw` instead of matching lines.
 - **Consequence:** local builds keep `0.1.2.0` in the repository, so a developer with a released (higher) plugin installed is never downgraded; the app only updates an older plugin.
 - **Not verified:** the workflow step and the `verify-release.sh` check ran only as a syntax check and against the locally packed zip; they haven't run in a real release. The first release or nightly after merge is the test. Mutation-checked: no.
+
+## The plugin version changes only when the plugin changes (#64, follow-up)
+
+- **Problem:** `plugin_version` was `X.Y.Z.<commit count>`, so every build, even one with the same plugin, made the app's auto-update replace the installed plugin.
+- **Approach (user's choices):** content-addressed. `scripts/plugin-hash.sh` hashes the committed plugin code (everything under `streamdeck/` except editor files, with the manifest's version line normalised). A ledger `plugin-versions.txt` on gh-pages maps hash to the version that was shipped; the build reads it before computing the version and appends to it after a real publish. Known hash: reuse the version. New hash: the build's `X.Y.Z` plus one more than the highest 4th number the ledger has for it.
+- **Consequence the user accepted:** the version follows the app's `X.Y.Z`, which can go down (nightly after a pre-release), so an installed plugin can be newer than the packaged one. New status `.newerThanPackaged` shows a warning pointing at Install/Update in Settings; nothing is downgraded automatically (SP17).
+- **Dependabot bumps of `package-lock.json` count as plugin changes** (they change the packed plugin). Editor settings don't.
+- **Removed:** `VERSION_COMMIT_COUNT` and the shallow-clone failure that only the commit count needed (tags still fail on a shallow clone).
+- **Bug caught by the tests:** an awk variable named `next` (a reserved word) broke the ledger lookup; renamed.
+- **Not verified:** the workflow's gh-pages ledger read and append ran nowhere; the first real pre-release or nightly after merge is its test. The first build stamps `X.Y.Z.0` (empty ledger), which can be lower than a plugin already installed from the old scheme; the new warning covers it.

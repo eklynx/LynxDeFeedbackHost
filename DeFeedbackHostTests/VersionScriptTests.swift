@@ -284,49 +284,127 @@ struct VersionScriptTests {
     }
 }
 
-/// The Stream Deck plugin's version (issue #64): docs/versioning-spec.md V14.
+/// The Stream Deck plugin's version (issue #64): docs/versioning-spec.md V17 to V19.
 struct PluginVersionOutputTests {
 
-    @Test("V14: plugin_version is the marketing version plus the commit count, and rises with every commit")
-    func pluginVersionRisesWithCommits() throws {
-        let repo = try makeRepo(tags: ["v1.4.7"])
-        defer { try? FileManager.default.removeItem(at: repo) }
-        #expect(try compute(in: repo).values["plugin_version"] == "1.4.8.1")
-
-        try git(["commit", "-q", "--allow-empty", "-m", "second"], in: repo)
-        #expect(try compute(in: repo).values["plugin_version"] == "1.4.8.2")
-        // A nightly shares the release's X.Y.Z, so only the commit count tells them apart.
-        #expect(try compute(in: repo, kind: "nightly").values["plugin_version"] == "1.4.8.2")
-        #expect(try compute(in: repo, kind: "prerelease").values["plugin_version"] == "1.4.8.2")
-    }
-
-    @Test("V14: VERSION_COMMIT_COUNT overrides the count; anything but digits is refused")
-    func commitCountOverride() throws {
-        let repo = try makeRepo(tags: ["v1.4.7"])
-        defer { try? FileManager.default.removeItem(at: repo) }
-        #expect(try compute(in: repo, extra: ["VERSION_COMMIT_COUNT": "77"]).values["plugin_version"] == "1.4.8.77")
-
-        let bad = try compute(in: repo, extra: ["VERSION_COMMIT_COUNT": "7x"])
-        #expect(bad.status != 0)
-        #expect(bad.error.contains("VERSION_COMMIT_COUNT"), "\(bad.error)")
-        #expect(bad.output.isEmpty)
-    }
-
-    @Test("V14: a shallow clone can't count commits, so it fails instead of stamping a wrong number")
-    func shallowCloneFails() throws {
+    /// A repo whose `streamdeck/` holds a manifest and one source file, committed and tagged.
+    private func makePluginRepo(tags: [String] = ["v1.4.7"]) throws -> URL {
         let repo = try makeRepo(tags: [])
-        defer { try? FileManager.default.removeItem(at: repo) }
-        try git(["commit", "-q", "--allow-empty", "-m", "second"], in: repo)
-        try git(["tag", "v1.0.0"], in: repo)
-        let clone = FileManager.default.temporaryDirectory.appending(path: "VersionScriptTests-clone-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: clone) }
-        try git(["clone", "-q", "--depth", "1", "file://\(repo.path)", clone.path], in: repo)
+        try writePlugin(source: "one", version: "0.1.0.0", in: repo)
+        try git(["add", "."], in: repo)
+        try git(["commit", "-q", "-m", "plugin"], in: repo)
+        for tag in tags { try git(["tag", tag], in: repo) }
+        return repo
+    }
 
-        let run = try compute(in: clone)
-        #expect(run.status != 0)
-        #expect(run.error.contains("shallow"), "\(run.error)")
-        #expect(run.output.isEmpty)
-        // With the count supplied there is nothing to get wrong.
-        #expect(try compute(in: clone, extra: ["VERSION_COMMIT_COUNT": "5"]).values["plugin_version"] == "1.0.1.5")
+    private func ledger(_ lines: [String]) throws -> URL {
+        let file = FileManager.default.temporaryDirectory.appending(path: "plugin-ledger-\(UUID().uuidString).txt")
+        try (lines.joined(separator: "\n") + "\n").write(to: file, atomically: true, encoding: .utf8)
+        return file
+    }
+
+    @Test("V18: with no ledger the plugin is new, so it gets the build's X.Y.Z with 4th number 0")
+    func noLedgerMeansNew() throws {
+        let repo = try makePluginRepo()
+        defer { try? FileManager.default.removeItem(at: repo) }
+        let run = try compute(in: repo)
+        #expect(run.values["plugin_version"] == "1.4.8.0", "\(run.error)")
+        #expect(run.values["plugin_hash"]?.count == 64)
+    }
+
+    @Test("V18: a plugin whose hash is in the ledger keeps its version, on any channel and after other commits")
+    func knownHashKeepsItsVersion() throws {
+        let repo = try makePluginRepo()
+        defer { try? FileManager.default.removeItem(at: repo) }
+        let hash = try #require(try compute(in: repo).values["plugin_hash"])
+        let file = try ledger(["\(hash) 0.9.9.7"])
+        defer { try? FileManager.default.removeItem(at: file) }
+        let extra = ["PLUGIN_LEDGER": file.path]
+
+        #expect(try compute(in: repo, extra: extra).values["plugin_version"] == "0.9.9.7")
+        // Non-plugin commits and the other channels change neither the hash nor the answer.
+        try git(["commit", "-q", "--allow-empty", "-m", "app only"], in: repo)
+        #expect(try compute(in: repo, kind: "nightly", extra: extra).values["plugin_version"] == "0.9.9.7")
+        #expect(try compute(in: repo, kind: "prerelease", extra: extra).values["plugin_version"] == "0.9.9.7")
+    }
+
+    @Test("V19: a new plugin gets one more than the highest 4th number the ledger has for this X.Y.Z")
+    func newHashGetsNextNumber() throws {
+        let repo = try makePluginRepo()
+        defer { try? FileManager.default.removeItem(at: repo) }
+        let file = try ledger(["aaa 1.4.8.2", "bbb 1.4.8.9", "ccc 1.4.7.40", "ddd 1.4.80.5"])
+        defer { try? FileManager.default.removeItem(at: file) }
+        let run = try compute(in: repo, extra: ["PLUGIN_LEDGER": file.path])
+        #expect(run.values["plugin_version"] == "1.4.8.10", "\(run.error)")
+    }
+
+    @Test("V19: a missing or empty ledger file is no history, not an error")
+    func missingLedgerIsFine() throws {
+        let repo = try makePluginRepo()
+        defer { try? FileManager.default.removeItem(at: repo) }
+        let missing = try compute(in: repo, extra: ["PLUGIN_LEDGER": "/nonexistent/ledger.txt"])
+        #expect(missing.values["plugin_version"] == "1.4.8.0", "\(missing.error)")
+        let empty = try ledger([])
+        defer { try? FileManager.default.removeItem(at: empty) }
+        #expect(try compute(in: repo, extra: ["PLUGIN_LEDGER": empty.path]).values["plugin_version"] == "1.4.8.0")
+    }
+
+    @Test("V17: the plugin hash changes with plugin code, not with the manifest version or editor files")
+    func hashIgnoresVersionAndEditorFiles() throws {
+        let repo = try makePluginRepo()
+        defer { try? FileManager.default.removeItem(at: repo) }
+        let base = try hash(in: repo)
+
+        // Only the manifest's version number: same hash.
+        try writePlugin(source: "one", version: "7.7.7.7", in: repo)
+        try git(["commit", "-qam", "version only"], in: repo)
+        #expect(try hash(in: repo) == base)
+
+        // Editor files (.idea, .vscode) aren't plugin code: same hash.
+        try write("x", to: "streamdeck/.idea/misc.xml", in: repo)
+        try write("x", to: "streamdeck/.vscode/launch.json", in: repo)
+        try git(["add", "."], in: repo)
+        try git(["commit", "-qm", "editor files"], in: repo)
+        #expect(try hash(in: repo) == base)
+
+        // Source change: different hash. Another manifest change (not the version line): different too.
+        try writePlugin(source: "two", version: "7.7.7.7", in: repo)
+        try git(["commit", "-qam", "source"], in: repo)
+        let changed = try hash(in: repo)
+        #expect(changed != base)
+        try writePlugin(source: "two", version: "7.7.7.7", name: "Renamed", in: repo)
+        try git(["commit", "-qam", "manifest name"], in: repo)
+        #expect(try hash(in: repo) != changed)
+    }
+
+    @Test("V17: the hash reads what is committed, not the working copy, so stamping the manifest can't change it")
+    func hashReadsHead() throws {
+        let repo = try makePluginRepo()
+        defer { try? FileManager.default.removeItem(at: repo) }
+        let base = try hash(in: repo)
+        try writePlugin(source: "uncommitted change", version: "9.9.9.9", in: repo)
+        #expect(try hash(in: repo) == base)
+    }
+
+    // MARK: - helpers
+
+    private func hash(in repo: URL) throws -> String {
+        let hashScript = URL(fileURLWithPath: scriptPath).deletingLastPathComponent().appending(path: "plugin-hash.sh").path
+        let run = try process("/bin/sh", [hashScript], in: repo)
+        #expect(run.status == 0, "\(run.error)")
+        return run.output.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func write(_ text: String, to path: String, in repo: URL) throws {
+        let url = repo.appending(path: path)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try text.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    /// The same shape as the real manifest: the top-level Version has one tab of indent, the nested runtime's two.
+    private func writePlugin(source: String, version: String, name: String = "Plugin", in repo: URL) throws {
+        try write(source, to: "streamdeck/src/plugin.ts", in: repo)
+        try write("{\n\t\"Name\": \"\(name)\",\n\t\"Version\": \"\(version)\",\n\t\"Nodejs\": {\n\t\t\"Version\": \"20\"\n\t}\n}\n",
+                  to: "streamdeck/com.example.sdPlugin/manifest.json", in: repo)
     }
 }
