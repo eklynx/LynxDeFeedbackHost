@@ -69,3 +69,9 @@ is hard to undo, so every path has a safety mechanism:
    section and greys the key.
 3. Release check (final task of #29): set test mode **off**, enable shutdown, grant the Automation
    prompt, shut down once for real, and confirm the default for a fresh install is test mode off.
+4. Web page (SH11, SH13): with shutdown disabled the Shutdown section is absent; enabled, it is
+   collapsed at the bottom and opens on click. The button stays disabled for any near-miss (other
+   case, extra space) and enables on the exact phrase. In test mode the section shows a "test mode"
+   badge and a send says it was a TEST and the computer is not shutting down. A wrong phrase (change
+   it in settings while the page is open) shows the server's message and the section stays usable.
+   The text box clears after each send.
