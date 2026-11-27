@@ -85,6 +85,8 @@ struct GeneralSettingsView: View {
                 .foregroundStyle(.secondary)
             }
 
+            ShutdownSettingsSection()
+
             UpdateSettingsSection()
         }
         .formStyle(.grouped)

@@ -9,6 +9,9 @@ Five host settings are individual `UserDefaults` keys in the `com.eklynx.sound.D
 | `Host.newInstancesStartBypassed` | bool | false | |
 | `Host.parallelRendering` | bool | false | Locked while running |
 | `Host.bufferSize` | int | `PluginConfiguration.defaultBufferSize` | Must be an offered size; locked while running |
+| `Host.shutdownEnabled` | bool | false | Accept the system shutdown command (`docs/shutdown-spec.md`). Read on every command, applies immediately |
+| `Host.shutdownTestMode` | bool | true (`UserDefaultsShutdownSettings.defaultTestMode`; flips to false before release, spec SH1) | When true a shutdown command is only logged, the Mac stays up |
+| `Host.shutdownPhrase` | string | `shutdown now` | Exact, case-sensitive safety phrase. An empty value reads as the default; the settings screen refuses to save an empty one. Code: `UserDefaultsShutdownSettings`. Tests: `ShutdownSettingsTests` |
 
 ```
 defaults read   com.eklynx.sound.DeFeedbackHost Host.bufferSize

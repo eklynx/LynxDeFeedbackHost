@@ -21,3 +21,12 @@ The marketing version, plus for nightlies a build time and short commit hash aft
 
 **Build number**
 A number that always rises from one build to the next, across all channels. Orders builds for the updater; people don't read it.
+
+**Shutdown phrase**
+The safety word for shutting down the Mac from the app. A shutdown request must carry exactly this phrase. It prevents accidents; it is not a secret.
+
+**Shutdown test mode**
+A setting that makes a shutdown request go through every step and check, but only records that it would have shut the Mac down, so the whole flow can be tried safely.
+
+**Magic key**
+During a Stream Deck shutdown attempt, the key that is currently shown in red and must be tapped next while the shutdown key is held.

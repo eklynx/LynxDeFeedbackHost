@@ -1,0 +1,71 @@
+# System shutdown: spec
+
+Source of truth in code: `DeFeedbackHost/Shutdown/ShutdownSettings.swift` and
+`DeFeedbackHost/Shutdown/SystemShutdown.swift` (contract), `ShutdownPhrase.swift` (phrase rules).
+API contract: `openapi.yaml` (`POST /api/shutdown`, status `shutdown` object). Origin: GitHub issue
+#29, split into #30 (API), #31 (system), #32 (web page), #33 (Stream Deck). Tests are named below;
+each sub-issue adds the tests for its own rules.
+
+## Model
+
+The app can shut down the Mac it runs on, on request from the web page or a Stream Deck key. That
+is hard to undo, so every path has a safety mechanism:
+
+- The **shutdown phrase** (an app setting, default `shutdown now`) must travel with the command.
+  It is accident protection, not a secret, and is published in plain text in the status payload.
+- The web page makes the user type the phrase. The Stream Deck makes the user hold the shutdown
+  key and tap a changing **magic key** several times in a row.
+- **Test mode** runs every check and every client flow but does not shut the Mac down.
+
+## Rules
+
+### Settings and phrase (#31)
+
+| Id | Rule | Test |
+|----|------|------|
+| SH1 | Defaults of a fresh install: shutdown disabled; test mode on. **Before release the test-mode default flips to off** (final task of #29). | `settingsDefaults` |
+| SH2 | The phrase defaults to `shutdown now`, is never empty (an empty or missing stored value reads as the default) and the settings screen refuses to save an empty one. | `phraseNeverEmpty` |
+| SH3 | Phrase matching is exact everywhere: case-sensitive, no trimming. | `phraseMatchesExactly` |
+| SH4 | The settings are individual `UserDefaults` keys, scriptable with `defaults write` (`Host.shutdownEnabled`, `Host.shutdownTestMode`, `Host.shutdownPhrase`). | `settingsAreDefaultsKeys` |
+| SH5 | The Automation (System Events) permission is reported as a warning only while shutdown is enabled and test mode is off. | `automationWarnsOnlyWhenNeeded` |
+
+### API (#30)
+
+| Id | Rule | Test |
+|----|------|------|
+| SH6 | Checks run in order: disabled (409), malformed body (400), wrong phrase (403). The first failure decides the response and nothing is shut down. | `shutdownCheckOrder` |
+| SH7 | All checks passed: 202 with the status snapshot plus `test: false`, after `SystemShutdown.perform()` was called once. | `shutdownAccepted` |
+| SH8 | Test mode: the same checks and a 202 with `test: true`; the computer is not shut down and the app records that it would have. | `shutdownInTestMode` |
+| SH9 | If `perform()` throws, the response is 500 with a readable message. | `shutdownFailureIs500` |
+| SH10 | `GET /api/status` and the `status` event carry `shutdown {enabled, testMode, phrase}`. `OpenAPIConformanceTests` covers the schema. | `statusCarriesShutdown` |
+
+### Web page (#32)
+
+| Id | Rule | Test |
+|----|------|------|
+| SH11 | The "Shutdown" section is at the bottom of the page and hidden while `shutdown.enabled` is false. | manual checklist |
+| SH12 | Clicking it reveals the phrase, a text box and a Shutdown button; the button is disabled until the text matches the phrase exactly (SH3). | `webPhraseMatch` |
+| SH13 | A matching phrase and a click sends `POST /api/shutdown` with the phrase. A 202 with `test: true` is shown as a test, not as shutting down; errors are shown with the server's message. | manual checklist |
+
+### Stream Deck (#33)
+
+| Id | Rule | Test |
+|----|------|------|
+| SH14 | The shutdown action is key-only. Holding it starts an attempt; releasing it before success ends the attempt with nothing sent. | `sequenceReleaseFails` |
+| SH15 | While held, one other key action of ours on the current screen is the magic key (red). Tapping it (press and release) while still holding the shutdown key makes the plugin pick the next magic key at random, different from the current one; keys may be re-used across the sequence. | `sequenceAdvances`, `sequenceNeverRepeatsCurrent` |
+| SH16 | After X magic taps in a row the attempt succeeds and the plugin sends the shutdown command with the phrase. X is a setting of the shutdown action, default 5, clamped to at least 5. | `sequenceSucceedsAfterX`, `xIsClamped` |
+| SH17 | Pressing any other key of ours fails the attempt. Keys that are not ours and dials are ignored. A screen or folder change while held fails the attempt. There is no time limit. | `sequenceWrongKeyFails`, `sequenceIgnoresForeignInput`, `sequencePageChangeFails` |
+| SH18 | A magic tap does not run that key's normal action. | `magicTapSuppressesAction` |
+| SH19 | With fewer than 2 eligible key actions on the screen, the shutdown key shows a large orange X and holds do nothing. | `tooFewKeysShowsX` |
+| SH20 | When shutdown is disabled the key is grey and ignores holds. | `disabledKeyIgnoresHold` |
+| SH21 | Success, failure and test results flash a checkmark or alert on the shutdown key, then every key returns to normal. A rejected phrase (empty, or different from the app's) shows the alert. A failed attempt may be restarted by holding again. | `resultFlashThenReset` |
+| SH22 | The phrase the plugin sends is the shutdown action's global setting, typed in by the user. | `phraseComesFromGlobalSetting` |
+
+## Manual checklist (real shutdown, not automatable)
+
+1. Leave test mode **on**. Run the web flow and the Stream Deck flow; both succeed and report a
+   test, and the Mac stays up.
+2. Wrong phrase from the web page is refused (403 message); disabled setting hides the web
+   section and greys the key.
+3. Release check (final task of #29): set test mode **off**, enable shutdown, grant the Automation
+   prompt, shut down once for real, and confirm the default for a fresh install is test mode off.
