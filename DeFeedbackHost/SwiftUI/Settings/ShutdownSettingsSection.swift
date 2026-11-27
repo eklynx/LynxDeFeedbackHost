@@ -15,7 +15,10 @@ struct ShutdownSettingsSection: View {
     @AppStorage(UserDefaultsShutdownSettings.Key.testMode)
     private var isTestMode = UserDefaultsShutdownSettings.defaultTestMode
 
+    @Environment(PermissionService.self) private var permissions: PermissionService?
+
     private let settings = UserDefaultsShutdownSettings()
+    private let priming = AutomationPriming(settings: UserDefaultsShutdownSettings())
     @State private var draftPhrase = ""
     @State private var phraseRefused = false
 
@@ -54,6 +57,14 @@ struct ShutdownSettingsSection: View {
             .foregroundStyle(.secondary)
         }
         .onAppear { draftPhrase = settings.phrase }
+        // Shutdown becoming possible is the moment to get Automation listed in System Settings (issue #62).
+        .onChange(of: isEnabled) { _, _ in primeAutomation() }
+        .onChange(of: isTestMode) { _, _ in primeAutomation() }
+    }
+
+    private func primeAutomation() {
+        guard priming.primeIfNeeded() else { return }
+        Task { await permissions?.refresh() }
     }
 
     private func commitPhrase() {

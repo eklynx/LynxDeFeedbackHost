@@ -149,7 +149,7 @@ private final class StubAuthorizer: AutomationAuthorizing {
 }
 
 @MainActor
-private final class StubRunner: AppleScriptRunning {
+final class StubRunner: AppleScriptRunning {
     var failure: AppleScriptFailure?
     private(set) var scripts: [String] = []
     func run(_ source: String) -> AppleScriptFailure? {

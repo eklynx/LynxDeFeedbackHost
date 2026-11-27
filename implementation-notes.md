@@ -559,3 +559,19 @@ Built in parallel against the Phase 0 contract (#31 system, #30 API, #32 web pag
 
 ## Noticed, not changed
 - The main window's `minHeight: 900` (`ContentView`) is taller than many laptop screens: the same kind of bug in a different window with a different fix. Worth its own issue.
+
+# Automation access can't be granted ahead of time (#62)
+
+## Decisions not in the issue
+- **Trigger:** one read-only Apple event (`tell application "System Events" to get name`) through the existing `AppleScriptRunning` seam, in `Permissions/AutomationPriming.swift`. It fires at launch, when shutdown is turned on and when test mode is turned off, but only while a real shutdown is possible (same condition as SH5). It never fires while test mode is on, because test mode never needs the permission.
+- **Before `permissions.start()` at launch:** the system query `AEDeterminePermissionToAutomateTarget` only reports `.notDetermined` once System Events is running; priming first means `start()` sees a real state instead of `.unknown`.
+- **No entitlements file:** the first guess was a missing `com.apple.security.automation.apple-events` entitlement. It is not missing: the build setting `AUTOMATION_APPLE_EVENTS = YES` puts it in the signed app (`codesign -d --entitlements -` on the Debug build shows it). The cause is only that nothing sent an event.
+- **Rule ids SH25–SH27** in `docs/shutdown-spec.md`; `docs/permissions-spec.md` P1 now mentions automation (it was stale).
+- `StubRunner` in `ShutdownSettingsTests.swift` is no longer private, so the priming tests share it.
+
+## Tradeoffs
+- `NSAppleScript` must run on the main thread, so the app's main thread is blocked while macOS shows the consent prompt (the real shutdown has the same behaviour). Not seen to matter, but the launch heartbeat stalls for that time.
+
+## Not verified
+- The real prompt and the entry under Privacy › Automation were not seen: the tests use a fake runner, and only unit tests were run (no UI tests, to leave the screen to the parallel #64 work).
+- A user who already denied Automation never gets the prompt again (macOS only asks once); the existing warning and the "Open System Settings" button cover that.

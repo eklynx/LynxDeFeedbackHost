@@ -6,7 +6,7 @@ Source of truth in code: `DeFeedbackHost/Permissions/PermissionChecking.swift` (
 
 ## Model
 
-The app needs three things the system makes the user approve: **Microphone** (audio input),
+The app needs these things the system makes the user approve: **Microphone** (audio input),
 **Local Network** (the web control page) and **Login Items** (launch at login, restart after a
 crash). At launch the app asks for what has never been asked, so the prompts come before they are
 needed instead of when a settings tab is first opened. Anything not allowed is shown as a warning
@@ -21,7 +21,7 @@ and the `status` event, with the "update available" notice and permission proble
 
 | Id | Rule | Test |
 |----|------|------|
-| P1 | At launch, `start()` requests only permissions that are not determined, once, in the order microphone, local network, login items. Denied ones are never re-asked. | `startRequestsOnlyUndetermined` |
+| P1 | At launch, `start()` requests only permissions that are not determined, once, in the order microphone, local network, login items, automation (automation is only asked while shutdown is possible; `AutomationPriming` sends the event that makes it askable, see `shutdown-spec.md` SH25). Denied ones are never re-asked. | `startRequestsOnlyUndetermined` |
 | P2 | An unknown state (not yet checked, or the system couldn't say) never produces a warning. | `unknownNeverWarns` |
 | P3 | A denied or not-yet-asked permission produces one warning with a stable id (`permission.<name>`); a granted one produces none. | `deniedProducesWarning` |
 | P4 | `refresh()` re-checks without asking; a grant made later clears the warning. Before `start()` it does nothing. Checks never overlap: a refresh that arrives mid-check runs once, right after it. | `refreshClearsAfterGrant`, `refreshDuringCheckIsQueued` |
