@@ -59,11 +59,14 @@ final class EngineSession {
             throw AudioHostError.microphoneAccessDenied
         }
 
-        let sampleRate = try StartPreflight.sampleRate(host.engineStartSettings(), outputDevice: output)
+        let rateSettings = host.engineStartSettings()
+        let sampleRate = try StartPreflight.sampleRate(rateSettings, outputDevice: output)
+        try StartPreflight.bufferSize(rateSettings, sampleRate: sampleRate)
         try await bringToSampleRate(sampleRate, input: input, output: output)
 
         let settings = host.engineStartSettings()
         let bufferSize = settings.bufferSize
+        try StartPreflight.bufferSize(settings, sampleRate: sampleRate)   // re-check: it may have changed while the rate settled
         try applyBufferSize(bufferSize, input: input, output: output)
 
         let controller = try makeEngine(bufferSize: bufferSize, input: input, output: output,
