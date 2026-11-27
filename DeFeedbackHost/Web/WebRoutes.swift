@@ -48,6 +48,7 @@ enum WebRoutes {
                                 wrongMethod: .UseGETorPOST, allow: "GET, HEAD, POST"),
         "/api/events": Route(handlers: ["GET": events], wrongMethod: .UseGET, allow: "GET"),
         "/api/system": Route(handlers: ["POST": system], wrongMethod: .UsePOST, allow: "POST"),
+        "/api/shutdown": Route(handlers: ["POST": shutdown], wrongMethod: .UsePOST, allow: "POST"),
         "/api/devices": Route(handlers: ["POST": devices], wrongMethod: .UsePOST, allow: "POST"),
         "/api/sample-rate": Route(handlers: ["POST": sampleRate], wrongMethod: .UsePOST, allow: "POST"),
         "/api/buffer-size": Route(handlers: ["POST": bufferSize], wrongMethod: .UsePOST, allow: "POST")
@@ -88,6 +89,12 @@ enum WebRoutes {
     private static func system(_ service: WebControlService, _ request: HTTPRequest,
                                _ id: String?) async -> HTTPServer.RouteOutcome {
         .respond(await service.controlSystem(request))
+    }
+
+    /// Contract stub (issue #29): #30 replaces this with the real handler. See docs/shutdown-spec.md.
+    private static func shutdown(_ service: WebControlService, _ request: HTTPRequest,
+                                 _ id: String?) -> HTTPServer.RouteOutcome {
+        .respond(.error(501, "Shutdown is not implemented yet"))
     }
 
     private static func devices(_ service: WebControlService, _ request: HTTPRequest,

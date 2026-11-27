@@ -474,3 +474,23 @@ The eleven loose SwiftUI files moved from the top of `DeFeedbackHost/` into `DeF
 
 ## Verification
 Renames only (the moved files are 100% identical except the app file, which lost the `Logger` block); the full `DeFeedbackHostTests` run, a Release build and `swiftlint lint --strict` all pass.
+
+# System shutdown (#29): contract (Phase 0)
+
+## What I changed
+New `DeFeedbackHost/Shutdown/` namespace with the contract the four sub-issues (#30 API, #31 system, #32 web, #33 Stream Deck) are built against: `ShutdownSettings` and `SystemShutdown` protocols (documented headers marked as source of truth) and `ShutdownPhrase` (default phrase, validity, exact match). Also `docs/shutdown-spec.md` (rules SH1–SH22 mapped to test names), the `POST /api/shutdown` path and `shutdown` status object in `openapi.yaml`, three GLOSSARY entries, and a **stub** route and status value so `OpenAPIConformanceTests` stays green.
+
+## Decisions not in the issues
+- **Disabled is checked before the body and the phrase** (409, then 400, then 403), so a disabled app never confirms whether a phrase would have been right.
+- **`test` is always present** in the 202 body (`true` or `false`), rather than only in test mode, so clients don't have to treat absence as false.
+- **`SystemShutdown.isTestMode`** lets the handler report `test` before calling `perform()`; the app composes one implementation that switches on the setting at call time.
+- **The Automation warning needs enabled and test mode off** (SH5). Test mode never touches System Events, so asking for the permission there would be noise.
+- **A failed `perform()` is a 500** with a readable message (SH9); the issues did not cover that case.
+- The stub route returns 501 and the stub status reports `enabled: false, testMode: true`. #30 replaces both; nothing else touches `WebRoutes.swift`, `WebStatusPayload.swift` or `openapi.yaml` for this feature.
+
+## Things to remember
+- **Test mode defaults to ON during development. A final task before release flips the default to OFF** (SH1, tracked in #29).
+- The phrase is not a secret: it is in the status payload on purpose.
+
+## Verification
+`OpenAPIConformanceTests` pass, `swiftlint lint --strict` is clean on the touched files, and `redocly lint` validates `openapi.yaml` (one existing license warning).

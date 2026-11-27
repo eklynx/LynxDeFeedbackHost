@@ -39,6 +39,12 @@ struct WebStatusPayload {
         warningSources.flatMap(\.warnings).map(\.jsonObject)
     }
 
+    /// Contract stub (issue #29): #30 reads the real `ShutdownSettings` here. Kept out of `status()`
+    /// so the conformance test sees one `shutdown` key, documented through `ShutdownStatus`.
+    func shutdownStatus() -> [String: Any] {
+        ["enabled": false, "testMode": true, "phrase": ShutdownPhrase.defaultPhrase]
+    }
+
     /// gets the status of the host.  All values are retrieved from the host even if they could be calculated locally.
     func status() -> [String: Any] {
         let diagnostics = host.diagnostics
@@ -46,6 +52,7 @@ struct WebStatusPayload {
         return [
             "protocol": WebControlService.protocolVersion,
             "warnings": warnings(),
+            "shutdown": shutdownStatus(),
             "running": host.isRunning,
             "canStart": host.canStart,
             "blockedReason": host.startBlockedReason ?? NSNull(),

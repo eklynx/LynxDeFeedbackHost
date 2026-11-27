@@ -291,6 +291,70 @@ paths:
         "415":
           $ref: "#/components/responses/UnsupportedMediaType"
 
+  /api/shutdown:
+    post:
+      tags: [Control]
+      operationId: shutdownSystem
+      summary: Shut down the computer the host runs on
+      description: |
+        Shuts the Mac down without prompting anyone. Because that is hard to undo, the body must
+        carry the **shutdown phrase**, which is compared exactly (case-sensitive, nothing trimmed).
+        The phrase is accident protection, not a secret: it is published in the status payload
+        (`shutdown.phrase`) so the control page can show it.
+
+        Checks run in this order, and the first one that fails decides the response: shutdown
+        support must be enabled (409), the body must be well formed (400), the phrase must match
+        (403). Nothing is shut down unless all pass.
+
+        In **test mode** (`shutdown.testMode`) every check runs and the response is a normal 202,
+        but the computer is not shut down; `test` in the response is `true`. Clients should say
+        "test" rather than "shutting down" when they see it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ShutdownRequest" }
+            examples:
+              phrase: { summary: The default phrase, value: { phrase: "shutdown now" } }
+      responses:
+        "202":
+          description: |
+            The shutdown was accepted (or, when `test` is `true`, only recorded). The body is the
+            usual status snapshot plus `test`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShutdownAccepted" }
+        "400":
+          description: 'The body is not `{"phrase": "<string>"}`.'
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: The phrase does not match the shutdown phrase. Nothing was done.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+        "409":
+          description: Shutdown support is turned off in the app's settings. Nothing was done.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          description: |
+            The system refused or failed the shutdown request, for example because the app has not
+            been allowed to control System Events. The message says why.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /api/devices:
     post:
       tags: [Control]
@@ -1137,6 +1201,51 @@ components:
           type: boolean
           description: True to start, false to stop.
 
+    ShutdownRequest:
+      type: object
+      required: [phrase]
+      additionalProperties: false
+      properties:
+        phrase:
+          type: string
+          description: The shutdown phrase, exactly as shown in `shutdown.phrase`.
+          examples: ["shutdown now"]
+
+    ShutdownStatus:
+      type: object
+      description: The shutdown settings, as clients need to see them.
+      required: [enabled, testMode, phrase]
+      properties:
+        enabled:
+          type: boolean
+          description: |
+            Whether the shutdown command is accepted. When false, clients should hide or disable
+            their shutdown control, and `POST /api/shutdown` answers 409.
+        testMode:
+          type: boolean
+          description: |
+            When true a shutdown command is checked and answered as normal but the computer is
+            not shut down.
+        phrase:
+          type: string
+          description: |
+            The shutdown phrase the command must carry. Never empty. Sent in plain text on
+            purpose; it prevents accidents and is not a secret.
+          examples: ["shutdown now"]
+
+    ShutdownAccepted:
+      description: The status snapshot, plus whether the shutdown was only a test.
+      allOf:
+        - $ref: "#/components/schemas/Status"
+        - type: object
+          required: [test]
+          properties:
+            test:
+              type: boolean
+              description: |
+                True when test mode was on: the request was checked and recorded and the computer
+                was NOT shut down.
+
     DeviceRequest:
       type: object
       description: At least one of `input` or `output` must be present.
@@ -1247,6 +1356,7 @@ components:
       required:
         - protocol
         - warnings
+        - shutdown
         - running
         - canStart
         - blockedReason
@@ -1298,6 +1408,9 @@ components:
             disappears as soon as the app stops reporting it, so a page can simply redraw from
             every status it receives. Clients should ignore unknown `id`s and `kind`s.
           items: { $ref: "#/components/schemas/Warning" }
+
+        shutdown:
+          $ref: "#/components/schemas/ShutdownStatus"
 
         running:
           type: boolean
