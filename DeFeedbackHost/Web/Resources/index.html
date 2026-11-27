@@ -337,7 +337,25 @@
   #shutdown .test-badge[hidden] { display: none; }
   #shutdown-body { margin-top: 0.8rem; }
   #shutdown-body p { margin: 0 0 0.6rem; font-size: 0.875rem; }
-  #shutdown-phrase { font-family: ui-monospace, Menlo, monospace; font-weight: 600; }
+  /* The phrase to type: its own line, in a chip with a red edge, so it stands out from the sentence around it.
+     pre-wrap keeps leading and trailing spaces visible, because the match is exact. */
+  #shutdown-phrase {
+    display: inline-block;
+    max-width: 100%;
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--bad);
+    border-radius: 0.4rem;
+    padding: 0.3rem 0.7rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: all;
+  }
+  #shutdown-body #shutdown-phrase-line { margin-bottom: 0.8rem; }
   #shutdown-text { font: inherit; width: 100%; margin-bottom: 0.6rem; }
   #shutdown-send { color: #fff; background: var(--bad); border-color: var(--bad); }
   #shutdown-result { margin: 0.6rem 0 0; font-size: 0.875rem; }
@@ -419,7 +437,8 @@
     <details id="shutdown-details">
       <summary>Shutdown <span class="test-badge" id="shutdown-test" hidden>test mode</span></summary>
       <div id="shutdown-body">
-        <p>Type <span id="shutdown-phrase"></span> to enable the button.</p>
+        <p>To enable the button, type this exact phrase:</p>
+        <p id="shutdown-phrase-line"><code id="shutdown-phrase"></code></p>
         <input type="text" id="shutdown-text" autocomplete="off" autocapitalize="off"
                autocorrect="off" spellcheck="false" aria-label="Shutdown phrase">
         <button type="button" class="small" id="shutdown-send" disabled>Shutdown</button>
