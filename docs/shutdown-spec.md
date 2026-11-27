@@ -63,6 +63,16 @@ is hard to undo, so every path has a safety mechanism:
 | SH23 | Magic keys are only mute, bypass or strength KEY actions (never the shutdown key, never dials) that are on the **same Stream Deck device** as the shutdown key being held, and that the Stream Deck app still shows. Keys on another device are never magic and do not count towards the minimum in SH19; each shutdown key is judged on its own device. Each magic key pick writes one debug-level log line (key, tap number, holder, device, number of eligible keys), and the plugin runs at debug log level, so a sequence that stops advancing can be diagnosed from the plugin log. | `magicKeysStayOnTheHoldersDevice`, `tooFewKeysIsPerDevice`, `keysNotShowingAreNeverMagic`, `magicPicksAreLogged` |
 | SH24 | The status snapshot reads the shutdown settings through a one-second cache (all three values from one snapshot), so the status loop does not read the defaults several times a second. The shutdown command never uses the cache: it reads the live settings, so a value changed a moment ago is never acted on in its old form. | `statusReadsAreServedFromTheCacheForAWhile`, `aChangeShowsUpWithinTheMaximumAge`, `aClockThatMovesBackwardsRefreshes`, `theCommandIgnoresTheCacheAndReadsTheLiveSettings` |
 
+### Automation priming (#62)
+
+macOS lists an app under Privacy › Automation only after it has sent an Apple event to System Events, so the permission could not be granted before the first real shutdown. Code: `Permissions/AutomationPriming.swift`.
+
+| Id | Rule | Test |
+|----|------|------|
+| SH25 | While shutdown is enabled and test mode is off, the app starts System Events if needed and then asks macOS for the Automation permission (`AEDeterminePermissionToAutomateTarget`, `askUser: true`) at launch, when shutdown is turned on and when test mode is turned off, so the prompt appears and the app is listed ahead of time. An AppleScript `get name` was tried first and did not work (it never reached System Events). | `primesWhenShutdownIsPossible` |
+| SH26 | Nothing is asked while shutdown is disabled or test mode is on (same condition as SH5). | `doesNotPrimeWhenNotNeeded` |
+| SH27 | A denied or undetermined answer is not an error; the Automation warning (SH5) reports it. | `denialIsNotAnError` |
+
 ## Manual checklist (real shutdown, not automatable)
 
 1. Turn test mode **on** in Settings (it is off by default). Run the web flow and the Stream Deck flow; both succeed and report a
@@ -70,7 +80,7 @@ is hard to undo, so every path has a safety mechanism:
 2. Wrong phrase from the web page is refused (403 message); disabled setting hides the web
    section and greys the key.
 3. Real shutdown: set test mode **off** (the default for a fresh install), enable shutdown, grant the
-   Automation prompt, and shut down once for real.
+   Automation prompt (it appears as soon as shutdown is enabled with test mode off, not at the first shutdown), and shut down once for real.
 4. Web page (SH11, SH13): with shutdown disabled the Shutdown section is absent; enabled, it is
    collapsed at the bottom and opens on click. The button stays disabled for any near-miss (other
    case, extra space) and enables on the exact phrase. In test mode the section shows a "test mode"

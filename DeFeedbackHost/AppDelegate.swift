@@ -106,8 +106,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !Self.isRunningUnderXCTest {
             updates.start()   // probes now only if the user opted in
 
-            // Ask for everything up front, so no prompt waits for a settings tab to be opened.
-            Task { await permissions.start() }
+            // Ask for everything up front, so no prompt waits for a settings tab to be opened. Automation can
+            // only be granted after the app has asked for it, so ask once up front (issue #62).
+            Task {
+                await AutomationPriming(settings: shutdownSettings).primeIfNeeded()
+                await permissions.start()
+            }
             // A grant made in System Settings while we run shows up when the user comes back.
             NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification,
                                                    object: nil, queue: .main) { [permissions] _ in

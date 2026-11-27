@@ -14,6 +14,14 @@ import Foundation
 protocol AutomationAuthorizing: AnyObject {
     /// State of the permission to send Apple events to System Events. Prompts only if `askUser`.
     func state(askUser: Bool) -> PermissionState
+
+    /// Launches System Events if needed and waits (up to a few seconds, without blocking the main thread)
+    /// until it is running. The permission query, and so the consent prompt, only works once it is.
+    func ensureTargetRunning() async
+}
+
+extension AutomationAuthorizing {
+    func ensureTargetRunning() async {}
 }
 
 @MainActor
@@ -21,16 +29,29 @@ final class SystemAutomationAuthorizer: AutomationAuthorizing {
 
     static let targetBundleID = "com.apple.systemevents"
 
+    private var isTargetRunning: Bool {
+        !NSRunningApplication.runningApplications(withBundleIdentifier: Self.targetBundleID).isEmpty
+    }
+
+    /// Starts System Events hidden if it isn't running; returns immediately.
+    private func launchTargetIfNeeded() {
+        guard !isTargetRunning,
+              let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: Self.targetBundleID) else { return }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = false
+        configuration.addsToRecentItems = false
+        configuration.hides = true
+        NSWorkspace.shared.openApplication(at: url, configuration: configuration)
+    }
+
+    func ensureTargetRunning() async {
+        launchTargetIfNeeded()
+        for _ in 0..<50 where !isTargetRunning { try? await Task.sleep(for: .milliseconds(100)) }
+    }
+
     func state(askUser: Bool) -> PermissionState {
         // System Events is launched on demand; the permission query needs it running.
-        if NSRunningApplication.runningApplications(withBundleIdentifier: Self.targetBundleID).isEmpty,
-           let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: Self.targetBundleID) {
-            let configuration = NSWorkspace.OpenConfiguration()
-            configuration.activates = false
-            configuration.addsToRecentItems = false
-            configuration.hides = true
-            NSWorkspace.shared.openApplication(at: url, configuration: configuration)
-        }
+        launchTargetIfNeeded()
         let target = NSAppleEventDescriptor(bundleIdentifier: Self.targetBundleID)
         guard let address = target.aeDesc else { return .unknown }
         let status = AEDeterminePermissionToAutomateTarget(address, AEEventClass(typeWildCard),
