@@ -475,6 +475,24 @@ The eleven loose SwiftUI files moved from the top of `DeFeedbackHost/` into `DeF
 ## Verification
 Renames only (the moved files are 100% identical except the app file, which lost the `Logger` block); the full `DeFeedbackHostTests` run, a Release build and `swiftlint lint --strict` all pass.
 
+# A buffer floor at 96 kHz and above, and a clearer install error
+
+## What I found
+At 96 kHz the De-Feedback plugin refused to be set up ("The AU Component rejected both mono and stereo buses at the specified sample rate") with the 32-frame buffer that was saved in the settings. I reproduced it without any audio hardware by loading the real plugin and attaching it to the engine (a throwaway test, not committed): at 96 kHz a 32-frame buffer fails and 64, 128 and 256 work; at 48 kHz 32 works. The same result came out on the code from before the AudioHost refactors, so it is a limit of the plugin, not a regression.
+
+## What I changed
+- **The rule, in one place:** `PluginConfiguration.minimumBufferSize(forSampleRate:)` and `bufferSizeProblem(bufferSize:sampleRate:)`: from 96 kHz up (with the host's usual 0.5 Hz tolerance) the buffer must be at least 64 samples. The sentence is "At 96000 Hz and above the buffer must be at least 64 samples; it is 32."
+- **Where it applies:** `startBlockedReason` and `canStart` (so Run is disabled and the sentence appears beside it as soon as either setting is chosen, and auto-run and the web start use it), and `StartPreflight.bufferSize` (checked before any hardware is touched, and again after the sample rate settles). The Buffer picker's tooltip mentions the floor.
+- **The install error** now names what was tried: "The AU Component couldn't be set up at 96000 Hz with a 32-sample buffer (it rejected both mono and stereo buses, or failed to initialise). Try a larger buffer or a lower sample rate." The engine reports only success or failure, so the wording covers a rejected format and a failed initialise.
+
+## Decisions
+- Block Run and explain; no greyed-out sizes and no silent raise of the buffer.
+- The web API still accepts any buffer size and sample rate while stopped (settings can be changed in either order); starting returns the existing 409 with the same sentence. `openapi.yaml` notes it.
+
+## Things to know
+- The floor is exactly what was measured at 96 kHz. Not measured: 88.2 kHz, and 176.4/192 kHz with small buffers. The rule covers "96 kHz and higher" as asked, and 88.2 kHz is left unrestricted.
+- Saved settings are not touched. A session saved with 96 kHz and a 32 buffer now opens with Run blocked and the reason shown (auto-run reports it too), until the buffer is raised.
+
 # System shutdown (#29): contract (Phase 0)
 
 ## What I changed

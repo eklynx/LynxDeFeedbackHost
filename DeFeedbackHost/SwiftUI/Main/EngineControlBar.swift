@@ -129,7 +129,9 @@ struct EngineControlBar: View {
     }
 
     private var bufferSizeHelp: String {
-        var lines = ["Sets the hardware buffer on both input and output devices.  Only changable while stopped."]
+        var lines = ["Sets the hardware buffer on both input and output devices.  Only changable while stopped.",
+                     "At \(Int(PluginConfiguration.highSampleRateThreshold)) Hz and above the plugin needs at least "
+                     + "\(PluginConfiguration.minimumBufferAtHighSampleRate) samples."]
         for (label, direction) in [("Input", AudioHost.AudioDirection.input),
                                    ("Output", AudioHost.AudioDirection.output)] {
             if let range = host.bufferSizeRange(for: direction) {

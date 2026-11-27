@@ -85,3 +85,30 @@ struct StartPreflightTests {
         #expect(text == AudioHostError.sampleRateUnavailable("Speakers").localizedDescription)
     }
 }
+
+// MARK: - Buffer floor at high sample rates
+
+@MainActor
+struct StartPreflightBufferTests {
+
+    private func settings(buffer: Int) -> EngineStartSettings {
+        EngineStartSettings(pluginInstalled: true, input: mic, output: speakers,
+                            inputRate: 96_000, outputRate: 96_000,
+                            bufferSize: buffer, parallelRendering: true)
+    }
+
+    @Test func aSmallBufferAtAHighRateIsRefusedWithTheSharedSentence() {
+        let text = message { try StartPreflight.bufferSize(settings(buffer: 32), sampleRate: 96_000) }
+        #expect(text == AudioHostError.bufferTooSmallForSampleRate(bufferSize: 32).localizedDescription)
+        #expect(text == PluginConfiguration.highSampleRateBufferMessage(bufferSize: 32))
+    }
+
+    @Test(arguments: [64, 128, 1024])
+    func theFloorAndAboveAreAccepted(_ buffer: Int) {
+        #expect(message { try StartPreflight.bufferSize(settings(buffer: buffer), sampleRate: 96_000) } == nil)
+    }
+
+    @Test func aLowRateTakesTheSmallestBuffer() {
+        #expect(message { try StartPreflight.bufferSize(settings(buffer: 32), sampleRate: 48_000) } == nil)
+    }
+}

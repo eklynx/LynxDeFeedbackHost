@@ -118,6 +118,7 @@ final class AudioHost {
             && selectedInputDevice != nil
             && selectedOutputDevice != nil
             && doSampleRatesMatch
+            && bufferSizeProblem == nil
             && devicesRejectingBufferSize.isEmpty
     }
 
@@ -177,6 +178,11 @@ final class AudioHost {
            let outputSampleRate = selectedOutputSampleRate,
            !doSampleRatesMatch {
             return "Sample rates differ between devices (\(Int(inputSampleRate)) / \(Int(outputSampleRate)) Hz)" // TODO: localize string
+        }
+
+        // The plugin can't be set up at this sample rate with this (small) buffer.
+        if let problem = bufferSizeProblem {
+            return problem
         }
 
         // Some device is not accepting the selected buffer size.
