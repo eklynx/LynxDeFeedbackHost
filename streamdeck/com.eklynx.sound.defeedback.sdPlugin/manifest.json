@@ -36,6 +36,22 @@
 			]
 		},
 		{
+			"Name": "Shutdown",
+			"UUID": "com.eklynx.sound.defeedback.shutdown",
+			"Tooltip": "Safely shuts the computer down: hold this key and tap the red key several times",
+			"Icon": "imgs/actions/shutdown/shutdown_icon",
+			"PropertyInspectorPath": "ui/shutdown.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/shutdown/shutdown_icon",
+					"ShowTitle": false
+				}
+			]
+		},
+		{
 			"Name": "Strength",
 			"UUID": "com.eklynx.sound.defeedback.strength",
 			"Tooltip": "Sets the strength of the specified plugin instance",

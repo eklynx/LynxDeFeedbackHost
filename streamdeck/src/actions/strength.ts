@@ -1,10 +1,11 @@
 import streamDeck, {
 	action, DialAction, DialDownEvent, DialRotateEvent,
 	DidReceiveSettingsEvent, KeyAction,
-	KeyDownEvent,
+	KeyDownEvent, KeyUpEvent,
 	SingletonAction,
-	WillAppearEvent
+	WillAppearEvent, WillDisappearEvent
 } from "@elgato/streamdeck";
+import {keyRegistry, shutdownSequence} from "../shutdown/shutdownRuntime";
 import type {JsonObject} from "@elgato/utils";
 import {formatNamed} from './helpers.js';
 
@@ -57,6 +58,8 @@ export class Strength extends SingletonAction<StrengthSettings> {
 	}
 
 	override async onWillAppear(ev: WillAppearEvent<StrengthSettings>) {
+		// Only KEYS can be a magic key of a shutdown attempt; dials are never registered.
+		if (ev.action.isKey()) keyRegistry.appear(ev.action.id, "strength", ev.action as KeyAction<JsonObject>);
 		actionSettings.set(ev.action.id, ev.payload.settings);
 		// Always a full draw: the screen may have been reset (page or profile switch).
 		const globalSettings: GlobalSettings = await streamDeck.settings.getGlobalSettings();
@@ -158,7 +161,16 @@ export class Strength extends SingletonAction<StrengthSettings> {
 		await Promise.allSettled(sends);
 	}
 
+	override onWillDisappear(ev: WillDisappearEvent<StrengthSettings>): void {
+		keyRegistry.disappear(ev.action.id);
+	}
+
+	override onKeyUp(ev: KeyUpEvent<StrengthSettings>): void {
+		shutdownSequence.keyUp(ev.action.id);   // a magic tap of a shutdown attempt: nothing else to do
+	}
+
 	override async onKeyDown(ev: KeyDownEvent<StrengthSettings>): Promise<void> {
+		if (shutdownSequence.keyDown(ev.action.id)) return;   // consumed by a shutdown attempt (docs/shutdown-spec.md SH18)
 		try {
 			const {settings} = ev.payload;
 

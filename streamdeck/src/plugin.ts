@@ -3,6 +3,7 @@ import streamDeck from "@elgato/streamdeck";
 import {Mute} from "./actions/mute";
 import {Bypass} from "./actions/bypass";
 import {Strength} from "./actions/strength";
+import {Shutdown} from "./actions/shutdown";
 import "./actions/iconRefreshListener";
 import {WebHostConnector} from "./WebHostConnector";
 import {getConnector, setConnector} from "./connectorState";
@@ -15,6 +16,7 @@ streamDeck.logger.setLevel("info");
 streamDeck.actions.registerAction(new Mute());
 streamDeck.actions.registerAction(new Bypass());
 streamDeck.actions.registerAction(new Strength());
+streamDeck.actions.registerAction(new Shutdown());
 
 
 const defaultSettings: GlobalSettings = {
