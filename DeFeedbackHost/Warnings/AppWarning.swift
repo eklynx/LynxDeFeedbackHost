@@ -25,7 +25,7 @@
 //    5. `link`                     -> https only. The web page can open a web page but not System
 //                                     Settings, so System Settings shortcuts live in the native UI.
 //    6. Ids in use                 -> `update`, `permission.microphone`, `permission.localNetwork`,
-//                                     `permission.loginItems`.
+//                                     `permission.loginItems`, `permission.automation`.
 //
 import Foundation
 

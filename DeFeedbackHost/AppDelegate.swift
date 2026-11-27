@@ -40,13 +40,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }()
     /// Asks for the permissions the app needs at launch and reports any that are denied (issue #14).
     /// Contract: `Permissions/PermissionChecking.swift`. Inert under XCTest so no test raises a prompt.
+    /// Shutdown settings and the command's mechanism (docs/shutdown-spec.md, contract in `Shutdown/`).
+    lazy var shutdownSettings = UserDefaultsShutdownSettings()
+    lazy var systemShutdown: SystemShutdown = ConfiguredShutdown(settings: shutdownSettings)
     lazy var permissions: PermissionService = {
         if Self.isRunningUnderXCTest {
             return PermissionService(checkers: Permission.allCases.map(InertPermissionChecker.init))
         }
         return PermissionService(checkers: [MicrophonePermission(),
                                             LocalNetworkPermission(),
-                                            LoginItemsPermission()])
+                                            LoginItemsPermission(),
+                                            AutomationPermission(settings: shutdownSettings)])
     }()
     private var heartbeatTimer: Timer?
     private var sigtermSource: DispatchSourceSignal?

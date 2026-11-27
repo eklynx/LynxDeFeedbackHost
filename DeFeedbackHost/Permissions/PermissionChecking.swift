@@ -10,8 +10,10 @@
 //
 //  # Model
 //
-//  The app needs three things the system makes the user approve: Microphone (audio input), Local
-//  Network (the web control page) and Login Items (launch at login / restart after a crash).
+//  The app needs four things the system makes the user approve: Microphone (audio input), Local
+//  Network (the web control page) and Login Items (launch at login / restart after a crash) and, only while a real shutdown is possible,
+//  Automation of System Events (`AutomationPermission` reports `.granted` unless shutdown is enabled
+//  and test mode is off, so it only warns when it matters).
 //  `PermissionService` asks for them together at launch, so the prompts come before they are
 //  needed, and reports a warning for each one that isn't allowed.
 //
@@ -48,6 +50,8 @@ enum Permission: String, CaseIterable, Identifiable, Sendable {
     case microphone
     case localNetwork
     case loginItems
+    /// Automation of System Events, needed only for a real shutdown (docs/shutdown-spec.md SH5).
+    case automation
 
     var id: String { rawValue }
 
@@ -56,6 +60,7 @@ enum Permission: String, CaseIterable, Identifiable, Sendable {
         case .microphone: "Microphone"
         case .localNetwork: "Local Network"
         case .loginItems: "Login Items"
+        case .automation: "Automation (System Events)"
         }
     }
 
@@ -68,6 +73,8 @@ enum Permission: String, CaseIterable, Identifiable, Sendable {
             "Local Network access is off, so other devices can't reach the web control page."
         case .loginItems:
             "Launch permissions need approval, so launch at login and restart after a crash won't work."
+        case .automation:
+            "Automation access for System Events is off, so the shutdown command can't shut this Mac down."
         }
     }
 
@@ -77,6 +84,7 @@ enum Permission: String, CaseIterable, Identifiable, Sendable {
         case .microphone: "System Settings › Privacy & Security › Microphone"
         case .localNetwork: "System Settings › Privacy & Security › Local Network"
         case .loginItems: "System Settings › General › Login Items & Extensions"
+        case .automation: "System Settings › Privacy & Security › Automation"
         }
     }
 
@@ -87,6 +95,8 @@ enum Permission: String, CaseIterable, Identifiable, Sendable {
             URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
         case .localNetwork:
             URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork")
+        case .automation:
+            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")
         case .loginItems:
             nil
         }

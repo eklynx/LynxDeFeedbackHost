@@ -43,7 +43,7 @@ struct PermissionSettingsSection: View {
     var body: some View {
         if let permissions {
             Section {
-                ForEach(Permission.allCases) { permission in
+                ForEach(Permission.allCases.filter { shows($0) }) { permission in
                     let state = permissions.states[permission] ?? .unknown
                     HStack {
                         Label(permission.label, systemImage: icon(for: state))
@@ -69,6 +69,11 @@ struct PermissionSettingsSection: View {
                 .foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// Automation only matters for a real shutdown, so its row appears only when it needs attention.
+    private func shows(_ permission: Permission) -> Bool {
+        permission != .automation || permissions?.states[.automation]?.needsAttention == true
     }
 
     private func icon(for state: PermissionState) -> String {
