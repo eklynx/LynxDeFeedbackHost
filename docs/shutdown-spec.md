@@ -69,9 +69,9 @@ macOS lists an app under Privacy › Automation only after it has sent an Apple 
 
 | Id | Rule | Test |
 |----|------|------|
-| SH25 | While shutdown is enabled and test mode is off, the app sends one harmless, read-only System Events event (`get name`, never a shutdown) at launch, when shutdown is turned on and when test mode is turned off, so the Automation prompt appears and the app is listed ahead of time. | `primesWhenShutdownIsPossible` |
-| SH26 | Nothing is sent while shutdown is disabled or test mode is on (same condition as SH5). | `doesNotPrimeWhenNotNeeded` |
-| SH27 | A refused or failed event is not an error; the Automation warning (SH5) reports it. | `failureIsNotAnError` |
+| SH25 | While shutdown is enabled and test mode is off, the app starts System Events if needed and then asks macOS for the Automation permission (`AEDeterminePermissionToAutomateTarget`, `askUser: true`) at launch, when shutdown is turned on and when test mode is turned off, so the prompt appears and the app is listed ahead of time. An AppleScript `get name` was tried first and did not work (it never reached System Events). | `primesWhenShutdownIsPossible` |
+| SH26 | Nothing is asked while shutdown is disabled or test mode is on (same condition as SH5). | `doesNotPrimeWhenNotNeeded` |
+| SH27 | A denied or undetermined answer is not an error; the Automation warning (SH5) reports it. | `denialIsNotAnError` |
 
 ## Manual checklist (real shutdown, not automatable)
 

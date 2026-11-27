@@ -63,8 +63,10 @@ struct ShutdownSettingsSection: View {
     }
 
     private func primeAutomation() {
-        guard priming.primeIfNeeded() else { return }
-        Task { await permissions?.refresh() }
+        Task {
+            guard await priming.primeIfNeeded() else { return }
+            await permissions?.refresh()
+        }
     }
 
     private func commitPhrase() {

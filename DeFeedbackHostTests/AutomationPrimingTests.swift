@@ -2,8 +2,8 @@
 //  AutomationPrimingTests.swift
 //  DeFeedbackHostTests
 //
-//  Covers docs/shutdown-spec.md rules SH25 to SH27 (#62). A fake script runner and an isolated UserDefaults
-//  suite, so no test sends an Apple event to System Events.
+//  Covers docs/shutdown-spec.md rules SH25 to SH27 (#62). A fake authorizer and an isolated UserDefaults
+//  suite, so no test asks macOS for the real permission.
 //
 //  - Tests initially created with AI with human edits, but all reviewed by human
 //
@@ -11,6 +11,24 @@ import Foundation
 import Testing
 
 @testable import DeFeedbackHost
+
+@MainActor
+private final class RecordingAuthorizer: AutomationAuthorizing {
+    var result: PermissionState = .notDetermined
+    private(set) var askUserCalls: [Bool] = []
+    private(set) var ensureRunningCount = 0
+    private(set) var orderedCalls: [String] = []
+
+    func state(askUser: Bool) -> PermissionState {
+        askUserCalls.append(askUser)
+        orderedCalls.append("state")
+        return result
+    }
+    func ensureTargetRunning() async {
+        ensureRunningCount += 1
+        orderedCalls.append("ensureRunning")
+    }
+}
 
 @MainActor
 struct AutomationPrimingTests {
@@ -24,34 +42,36 @@ struct AutomationPrimingTests {
         return UserDefaultsShutdownSettings(defaults: defaults)
     }
 
-    @Test("SH25: with shutdown enabled and test mode off, one harmless System Events event is sent")
-    func primesWhenShutdownIsPossible() {
-        let runner = StubRunner()
-        let priming = AutomationPriming(settings: makeSettings(enabled: true, testMode: false), runner: runner)
+    @Test("SH25: with shutdown enabled and test mode off, System Events is started first, then the permission is asked for")
+    func primesWhenShutdownIsPossible() async {
+        let authorizer = RecordingAuthorizer()
+        let priming = AutomationPriming(settings: makeSettings(enabled: true, testMode: false), authorizer: authorizer)
 
-        #expect(priming.primeIfNeeded() == true)
-        #expect(runner.scripts == [AutomationPriming.script])
-        #expect(!AutomationPriming.script.contains("shut down"), "priming must never be able to shut the Mac down")
+        #expect(await priming.primeIfNeeded() == true)
+        #expect(authorizer.orderedCalls == ["ensureRunning", "state"])
+        #expect(authorizer.askUserCalls == [true])
     }
 
-    @Test("SH26: nothing is sent while shutdown is disabled or test mode is on")
-    func doesNotPrimeWhenNotNeeded() {
+    @Test("SH26: nothing is asked while shutdown is disabled or test mode is on")
+    func doesNotPrimeWhenNotNeeded() async {
         for (enabled, testMode) in [(false, false), (false, true), (true, true)] {
-            let runner = StubRunner()
-            let priming = AutomationPriming(settings: makeSettings(enabled: enabled, testMode: testMode), runner: runner)
+            let authorizer = RecordingAuthorizer()
+            let priming = AutomationPriming(settings: makeSettings(enabled: enabled, testMode: testMode), authorizer: authorizer)
 
-            #expect(priming.primeIfNeeded() == false, "enabled \(enabled), test mode \(testMode)")
-            #expect(runner.scripts.isEmpty)
+            #expect(await priming.primeIfNeeded() == false, "enabled \(enabled), test mode \(testMode)")
+            #expect(authorizer.orderedCalls.isEmpty)
         }
     }
 
-    @Test("SH27: a refused or failed event is not an error and still counts as primed")
-    func failureIsNotAnError() {
-        let runner = StubRunner()
-        runner.failure = AppleScriptFailure(number: -1743, message: "Not authorized to send Apple events")
-        let priming = AutomationPriming(settings: makeSettings(enabled: true, testMode: false), runner: runner)
+    @Test("SH27: a denied or undetermined answer is not an error and still counts as primed")
+    func denialIsNotAnError() async {
+        for answer in [PermissionState.denied, .notDetermined, .unknown] {
+            let authorizer = RecordingAuthorizer()
+            authorizer.result = answer
+            let priming = AutomationPriming(settings: makeSettings(enabled: true, testMode: false), authorizer: authorizer)
 
-        #expect(priming.primeIfNeeded() == true)
-        #expect(runner.scripts.count == 1)
+            #expect(await priming.primeIfNeeded() == true, "answer \(answer)")
+            #expect(authorizer.askUserCalls.count == 1)
+        }
     }
 }

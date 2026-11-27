@@ -563,15 +563,17 @@ Built in parallel against the Phase 0 contract (#31 system, #30 API, #32 web pag
 # Automation access can't be granted ahead of time (#62)
 
 ## Decisions not in the issue
-- **Trigger:** one read-only Apple event (`tell application "System Events" to get name`) through the existing `AppleScriptRunning` seam, in `Permissions/AutomationPriming.swift`. It fires at launch, when shutdown is turned on and when test mode is turned off, but only while a real shutdown is possible (same condition as SH5). It never fires while test mode is on, because test mode never needs the permission.
-- **Before `permissions.start()` at launch:** the system query `AEDeterminePermissionToAutomateTarget` only reports `.notDetermined` once System Events is running; priming first means `start()` sees a real state instead of `.unknown`.
-- **No entitlements file:** the first guess was a missing `com.apple.security.automation.apple-events` entitlement. It is not missing: the build setting `AUTOMATION_APPLE_EVENTS = YES` puts it in the signed app (`codesign -d --entitlements -` on the Debug build shows it). The cause is only that nothing sent an event.
+- **Trigger:** `Permissions/AutomationPriming.swift` starts System Events (hidden) if it isn't running, waits for it (up to 5 s, without blocking the main thread), then calls `AEDeterminePermissionToAutomateTarget(askUser: true)` through the existing `AutomationAuthorizing` seam. It fires at launch, when shutdown is turned on and when test mode is turned off, but only while a real shutdown is possible (same condition as SH5). It never fires while test mode is on, because test mode never needs the permission.
+- **First attempt, an AppleScript `get name` through `AppleScriptRunning`, did not work.** On a real Mac it returned success in 45 ms, System Events was only started about 2 s later (by the permission check, not by the script), `tccd` logged no Apple Events request, and nothing was prompted or listed. The cause is not known; the unit tests could not catch it because they used a fake runner. Launching outside Xcode and resetting the app's Automation records (`tccutil reset AppleEvents`) changed nothing, so neither Xcode's attribution nor a stale record was the cause.
+- **Why the existing `request()` never helped:** at launch System Events isn't running, so the first query returns `-600` (`.unknown`), and `PermissionService.start()` only requests on `.notDetermined`; `refresh()` never requests. Priming now waits for System Events, so the ask sees a real state.
+- **No entitlements file:** the first guess was a missing `com.apple.security.automation.apple-events` entitlement. It is not missing: the build setting `AUTOMATION_APPLE_EVENTS = YES` puts it in the signed app (`codesign -d --entitlements -` on the Debug build shows it).
 - **Rule ids SH25–SH27** in `docs/shutdown-spec.md`; `docs/permissions-spec.md` P1 now mentions automation (it was stale).
-- `StubRunner` in `ShutdownSettingsTests.swift` is no longer private, so the priming tests share it.
 
 ## Tradeoffs
-- `NSAppleScript` must run on the main thread, so the app's main thread is blocked while macOS shows the consent prompt (the real shutdown has the same behaviour). Not seen to matter, but the launch heartbeat stalls for that time.
+- `AEDeterminePermissionToAutomateTarget(askUser: true)` blocks the main thread while macOS shows the consent prompt (the real shutdown has the same behaviour). Not seen to matter, but the launch heartbeat stalls for that time.
+- The priming logs one line (`Automation priming: asked for the permission, state …`) so a failure to prompt can be diagnosed from the unified log.
 
-## Not verified
-- The real prompt and the entry under Privacy › Automation were not seen: the tests use a fake runner, and only unit tests were run (no UI tests, to leave the screen to the parallel #64 work).
+## Verified and not verified
+- Verified by hand on a real Mac (shutdown on, test mode off): the macOS Automation prompt appeared at launch and the app was listed under Privacy › Automation with System Events as a target.
+- Not run: UI tests (to leave the screen to the parallel #64 work). The test-mode-off and toggle triggers were not exercised by hand.
 - A user who already denied Automation never gets the prompt again (macOS only asks once); the existing warning and the "Open System Settings" button cover that.

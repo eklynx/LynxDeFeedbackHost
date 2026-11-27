@@ -107,9 +107,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             updates.start()   // probes now only if the user opted in
 
             // Ask for everything up front, so no prompt waits for a settings tab to be opened. Automation can
-            // only be granted after an Apple event was sent, so send a harmless one first (issue #62).
+            // only be granted after the app has asked for it, so ask once up front (issue #62).
             Task {
-                AutomationPriming(settings: shutdownSettings).primeIfNeeded()
+                await AutomationPriming(settings: shutdownSettings).primeIfNeeded()
                 await permissions.start()
             }
             // A grant made in System Settings while we run shows up when the user comes back.
