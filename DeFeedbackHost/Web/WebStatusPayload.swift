@@ -49,7 +49,7 @@ struct WebStatusPayload {
     func shutdownStatus() -> [String: Any] {
         [
             "enabled": shutdownSettings?.isEnabled ?? false,
-            "testMode": shutdownSettings?.isTestMode ?? true,
+            "testMode": shutdownSettings?.isTestMode ?? UserDefaultsShutdownSettings.defaultTestMode,
             "phrase": shutdownSettings?.phrase ?? ShutdownPhrase.defaultPhrase
         ]
     }

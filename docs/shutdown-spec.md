@@ -23,7 +23,7 @@ is hard to undo, so every path has a safety mechanism:
 
 | Id | Rule | Test |
 |----|------|------|
-| SH1 | Defaults of a fresh install: shutdown disabled; test mode on. **Before release the test-mode default flips to off** (final task of #29). | `settingsDefaults` |
+| SH1 | Defaults of a fresh install: shutdown disabled; test mode **off** (opt-in; it was on while the feature was built). | `settingsDefaults` |
 | SH2 | The phrase defaults to `shutdown now`, is never empty (an empty or missing stored value reads as the default) and the settings screen refuses to save an empty one. | `phraseNeverEmpty` |
 | SH3 | Phrase matching is exact everywhere: case-sensitive, no trimming. | `phraseMatchesExactly` |
 | SH4 | The settings are individual `UserDefaults` keys, scriptable with `defaults write` (`Host.shutdownEnabled`, `Host.shutdownTestMode`, `Host.shutdownPhrase`). | `settingsAreDefaultsKeys` |
@@ -65,12 +65,12 @@ is hard to undo, so every path has a safety mechanism:
 
 ## Manual checklist (real shutdown, not automatable)
 
-1. Leave test mode **on**. Run the web flow and the Stream Deck flow; both succeed and report a
+1. Turn test mode **on** in Settings (it is off by default). Run the web flow and the Stream Deck flow; both succeed and report a
    test, and the Mac stays up.
 2. Wrong phrase from the web page is refused (403 message); disabled setting hides the web
    section and greys the key.
-3. Release check (final task of #29): set test mode **off**, enable shutdown, grant the Automation
-   prompt, shut down once for real, and confirm the default for a fresh install is test mode off.
+3. Real shutdown: set test mode **off** (the default for a fresh install), enable shutdown, grant the
+   Automation prompt, and shut down once for real.
 4. Web page (SH11, SH13): with shutdown disabled the Shutdown section is absent; enabled, it is
    collapsed at the bottom and opens on click. The button stays disabled for any near-miss (other
    case, extra space) and enables on the exact phrase. In test mode the section shows a "test mode"

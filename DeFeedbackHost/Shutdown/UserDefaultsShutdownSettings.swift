@@ -17,9 +17,9 @@ final class UserDefaultsShutdownSettings: ShutdownSettings {
         static let phrase = "Host.shutdownPhrase"
     }
 
-    /// Spec SH1: the test-mode default of a fresh install. It is ON while the feature is being
-    /// built; the final task of GitHub #29 flips this ONE constant to `false` before release.
-    static let defaultTestMode = true
+    /// Spec SH1: the test-mode default of a fresh install is OFF (it was ON while the feature was
+    /// being built; GitHub #29 flipped this ONE constant for release). Test mode is opt-in.
+    static let defaultTestMode = false
 
     /// Spec SH1: shutdown is disabled on a fresh install.
     static let defaultEnabled = false

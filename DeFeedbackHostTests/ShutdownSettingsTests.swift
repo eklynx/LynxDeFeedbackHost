@@ -20,12 +20,12 @@ struct ShutdownSettingsTests {
         return defaults
     }
 
-    @Test("SH1: a fresh install is disabled with test mode on")
+    @Test("SH1: a fresh install is disabled with test mode off")
     func settingsDefaults() {
         let settings = UserDefaultsShutdownSettings(defaults: makeDefaults())
         #expect(settings.isEnabled == false)
         #expect(settings.isTestMode == UserDefaultsShutdownSettings.defaultTestMode)
-        #expect(settings.isTestMode == true, "flips to false in the release task of #29, with this test")
+        #expect(settings.isTestMode == false, "test mode is opt-in: a fresh install really shuts down once enabled")
         #expect(settings.phrase == "shutdown now")
     }
 

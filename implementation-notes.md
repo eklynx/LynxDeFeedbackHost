@@ -507,7 +507,7 @@ New `DeFeedbackHost/Shutdown/` namespace with the contract the four sub-issues (
 - The stub route returns 501 and the stub status reports `enabled: false, testMode: true`. #30 replaces both; nothing else touches `WebRoutes.swift`, `WebStatusPayload.swift` or `openapi.yaml` for this feature.
 
 ## Things to remember
-- **Test mode defaults to ON during development. A final task before release flips the default to OFF** (SH1, tracked in #29).
+- Test mode was ON by default during development; it is now OFF by default (SH1).
 - The phrase is not a secret: it is in the status payload on purpose.
 
 ## Verification
@@ -535,4 +535,4 @@ Built in parallel against the Phase 0 contract (#31 system, #30 API, #32 web pag
 - `DmgScriptTests/makesARealImage` failed once in the full run and once on its own on the merged tree, and passed on the base commit and in other runs. It does not touch this feature; treat it as intermittent until shown otherwise.
 
 ## Before release
-- Flip the test-mode default to OFF: `UserDefaultsShutdownSettings.defaultTestMode`, spec SH1, and the `settingsDefaults` assertion that hard-codes ON.
+- Done: the test-mode default is now OFF (`UserDefaultsShutdownSettings.defaultTestMode`, spec SH1, the `settingsDefaults` test, `docs/cli-settings-spec.md`). Anyone testing the flow must turn test mode on in Settings first.
