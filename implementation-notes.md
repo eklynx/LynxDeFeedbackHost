@@ -575,5 +575,6 @@ Built in parallel against the Phase 0 contract (#31 system, #30 API, #32 web pag
 
 ## Verified and not verified
 - Verified by hand on a real Mac (shutdown on, test mode off): the macOS Automation prompt appeared at launch and the app was listed under Privacy › Automation with System Events as a target.
+- Verified by hand: a real shutdown (through `NSAppleScript`, with the permission granted) shut the Mac down, so the real shutdown path needs no change; only the priming had the silent-success problem.
 - Not run: UI tests (to leave the screen to the parallel #64 work). The test-mode-off and toggle triggers were not exercised by hand.
 - A user who already denied Automation never gets the prompt again (macOS only asks once); the existing warning and the "Open System Settings" button cover that.
