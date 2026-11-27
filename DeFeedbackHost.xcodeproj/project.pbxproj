@@ -758,7 +758,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 27.0;
-				MARKETING_VERSION = 0.1.2;
+				MARKETING_VERSION = 0.3.0;
 				OTHER_CPLUSPLUSFLAGS = (
 					"-Wfunction-effects",
 					"-Werror=function-effects",
@@ -825,7 +825,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 27.0;
-				MARKETING_VERSION = 0.1.2;
+				MARKETING_VERSION = 0.3.0;
 				OTHER_CPLUSPLUSFLAGS = (
 					"-Wfunction-effects",
 					"-Werror=function-effects",
