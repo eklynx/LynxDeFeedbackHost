@@ -32,6 +32,16 @@ enum WebErrorStrings: String {
     case StartRefused = "Unable to start web host."
     case StartFailed = "The web host failed to start."
 
+    // MARK: - Shutdown
+
+    case ShutdownDisabled = "Shutdown is turned off in the app's settings."
+    case ExpectedPhrase = "Expected {\"phrase\": \"<shutdown phrase>\"}"
+    case WrongPhrase = "That is not the shutdown phrase."
+    case ShutdownNotPermitted = """
+        macOS did not allow the shutdown. Allow DeFeedback Host to control System Events in \
+        System Settings > Privacy & Security > Automation.
+        """
+
     // MARK: - Devices
 
     case ExpectedDeviceUIDs = """
@@ -80,6 +90,10 @@ enum WebErrorStrings: String {
     static func bufferSizeNotOffered(_ frames: Int, offered: [Int]) -> String {
         let list = offered.map(String.init).joined(separator: ", ")
         return "\(frames) frames is not valid for the host. The host offers \(list) as valid values."
+    }
+
+    static func shutdownFailed(_ reason: String) -> String {
+        "The shutdown failed: \(reason)"
     }
 
     static func noInstance(id text: String) -> String {
