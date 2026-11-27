@@ -536,3 +536,26 @@ Built in parallel against the Phase 0 contract (#31 system, #30 API, #32 web pag
 
 ## Before release
 - Done: the test-mode default is now OFF (`UserDefaultsShutdownSettings.defaultTestMode`, spec SH1, the `settingsDefaults` test, `docs/cli-settings-spec.md`). Anyone testing the flow must turn test mode on in Settings first.
+
+# Settings window taller than the screen (#27)
+
+## Decisions not in the issue
+- **Resizable, capped, scrolls:** the window is 440 wide, its height is user-resizable between 200 and 800 pt of content (about 890 with the chrome at most), and a tab taller than the window scrolls. General is not split into tabs and no footer text was shortened; both stay available as separate issues.
+- **800 pt:** the first attempt came out at 450 pt (too small); about double was asked for. No smallest display is documented. A laptop with about 860 pt usable can't quite fit 890, but the user can drag it shorter and the size is remembered; lower `SettingsWindowLayout.maxContentHeight` if small laptops matter.
+- **Settings is now a `Window` scene, not `Settings`:** only a `Window` can be resized. "Settings…" (⌘,) is a menu item in `SettingsCommand.swift` that opens it. The tab strip is hand-built (`SettingsView.swift`): `TabView` in a `Window` loses the icons, and a `.toolbar` strip drew nothing. A visible change: the tabs sit at the top of the window content (icon over label), not in the title bar as in the system Settings window, and the title is always "Settings" instead of the tab's name.
+- **Window size is remembered** (normal for a `Window` scene), and switching tabs keeps the size, so a short tab shows empty space below it in a tall window.
+- **Rule ids SW1–SW4:** S1–S8 already belong to the static-checks spec.
+
+## What went wrong on the way
+- **First attempt was a regression:** a flexible height range in a `Settings` tab made the window ignore the tab content and open at 450 pt on every tab. My unit tests passed because they measured an isolated view's `fittingSize` before SwiftUI's first layout pass. I found it only by driving the real app, and replaced those tests with UI tests that read the real window (`SettingsWindowSizingUITests`), checked against the broken states. `SettingsWindowLayoutTests` only pins the numbers the UI test hard-codes.
+- **Resizing the `Settings` scene window did not work:** `.windowResizability(.contentSize)` and inserting `.resizable` from AppKit both left the zoom button disabled and dragging inert; the AppKit attempt also gave wrong tab heights. Reverted, which led to the `Window` scene above.
+- **Tab buttons did not click:** a `.plain` button only hit-tests its drawn pixels, so a click on the gap between icon and label did nothing. Fixed with `.contentShape(Rectangle())`.
+
+## Not verified
+- Opening Settings by hand in the real app and looking at it; only the UI tests and screenshots of their runs. In particular the look of the tab strip next to the system Settings window, and a first launch on a small laptop display.
+- The UI tests can't force warning rows on; the maximum holds for them by construction (they only add scrolled content).
+- The tab's height is zero for the first layout pass, so the window might flash small for an instant; not seen in the UI runs.
+- Old saved window state: a user who ran the previous build has a stale `NSWindow Frame com_apple_SwiftUI_Settings_window` default, which is harmless and unused.
+
+## Noticed, not changed
+- The main window's `minHeight: 900` (`ContentView`) is taller than many laptop screens: the same kind of bug in a different window with a different fix. Worth its own issue.
