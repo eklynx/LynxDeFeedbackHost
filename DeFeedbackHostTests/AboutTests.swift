@@ -3,7 +3,7 @@
 //  DeFeedbackHostTests
 //
 //  What the About window claims about the app and about the plugin it hosts. The layout is
-//  checked by the two previews in `AboutView.swift`; these cover the facts it reads.
+//  checked by the two previews in `SwiftUI/About/AboutView.swift`; these cover the facts it reads.
 //
 //  - Tests initially created with AI with human edits, but all reviewed by human
 
