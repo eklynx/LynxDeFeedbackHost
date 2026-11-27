@@ -1,0 +1,52 @@
+<svg viewBox="0 0 144 144" xmlns="http://www.w3.org/2000/svg">
+	<!-- Templated key image: {showNormal} {showDisabled} {showTooFew} {showSuccess} {showTest} {showAlert} are "block" or "none". -->
+
+	<symbol id="power" width="84" height="90" viewBox="-0.8 -0.5 177 202">
+		<path fill="none" stroke-width="30" stroke-linecap="round" d="M33.7,64.3C22.1,77.2,15,94.3,15,113
+	c0,40.1,32.5,72.7,72.7,72.7c40.1,0,72.7-32.5,72.7-72.7c0-18.7-7.1-35.8-18.7-48.7"/>
+		<line fill="none" stroke-width="30" stroke-linecap="round" x1="87.8" y1="15" x2="87.8" y2="113"/>
+	</symbol>
+
+	<rect x="0" y="0" width="144" height="144" fill="#202020"/>
+
+	<!-- normal -->
+	<g display="{showNormal}">
+		<use href="#power" x="30" y="27" stroke="#ff4040"/>
+	</g>
+
+	<!-- disabled: grey -->
+	<g display="{showDisabled}">
+		<rect x="0" y="0" width="144" height="144" fill="#555555"/>
+		<use href="#power" x="30" y="27" stroke="#8a8a8a"/>
+	</g>
+
+	<!-- too few keys: dimmed power button under a large orange X -->
+	<g display="{showTooFew}">
+		<use href="#power" x="30" y="27" stroke="#6b6b6b"/>
+		<g stroke="darkorange" stroke-width="20" stroke-linecap="round">
+			<line x1="22" y1="22" x2="122" y2="122"/>
+			<line x1="122" y1="22" x2="22" y2="122"/>
+		</g>
+	</g>
+
+	<!-- success: green check -->
+	<g display="{showSuccess}">
+		<rect x="0" y="0" width="144" height="144" fill="#1c3a1c"/>
+		<path d="M30 76 L60 106 L116 40" fill="none" stroke="lime" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+	</g>
+
+	<!-- test: cyan check with a TEST label (not a real shutdown) -->
+	<g display="{showTest}">
+		<rect x="0" y="0" width="144" height="144" fill="#12323a"/>
+		<path d="M32 62 L58 88 L110 30" fill="none" stroke="cyan" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+		<text x="72" y="130" font-size="26" font-weight="900" fill="cyan" text-anchor="middle">TEST</text>
+	</g>
+
+	<!-- alert: red warning triangle -->
+	<g display="{showAlert}">
+		<rect x="0" y="0" width="144" height="144" fill="#3a1212"/>
+		<path d="M72 18 L128 118 L16 118 Z" fill="none" stroke="red" stroke-width="12" stroke-linejoin="round"/>
+		<line x1="72" y1="52" x2="72" y2="86" stroke="red" stroke-width="12" stroke-linecap="round"/>
+		<circle cx="72" cy="102" r="7" fill="red"/>
+	</g>
+</svg>

@@ -128,6 +128,60 @@ export class WebHostConnector {
         });
     }
 
+    /**
+     * POST /api/shutdown {phrase} (openapi.yaml `shutdownSystem`). Resolves on 202 with whether the host only
+     * tested; rejects on 400/401/403/409/500, a timeout or a network error (same 500 ms timeout as the other commands).
+     */
+    async sendShutdown(phrase: string): Promise<{ test: boolean }> {
+        if (!this.isConnected) {
+            throw new Error("Not connected to web host");
+        }
+
+        const body = JSON.stringify({phrase});
+        streamDeck.logger.info("Sending shutdown command to web host");
+
+        return new Promise<{ test: boolean }>((resolve, reject) => {
+            const req = http.request(
+                {
+                    hostname: this.hostname,
+                    port: this.port,
+                    path: "/api/shutdown",
+                    method: "POST",
+                    timeout: COMMAND_TIMEOUT_MS,
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Content-Length": Buffer.byteLength(body),
+                        ...this.authHeaders()
+                    }
+                },
+                (res) => {
+                    let data = "";
+                    res.setEncoding("utf8");
+                    res.on("data", (chunk: string) => (data += chunk));
+                    res.on("error", reject);
+                    res.on("end", () => {
+                        let parsed: { error?: string; test?: boolean } = {};
+                        try {
+                            parsed = JSON.parse(data);
+                        } catch {
+                            // Non-JSON body; fall back to the status code alone.
+                        }
+                        if (res.statusCode === 202) {
+                            resolve({test: parsed.test === true});
+                            return;
+                        }
+                        const message = parsed.error ?? "";
+                        reject(new Error(`Host rejected shutdown command (${res.statusCode})${message ? `: ${message}` : ""}`));
+                    });
+                }
+            );
+
+            req.on("timeout", () => req.destroy(new Error("Timed out sending shutdown command")));
+            req.on("error", reject);
+            req.end(body);
+        });
+    }
+
     private commandBody(command: HostCommand): Record<string, boolean | number> {
         switch (command.type) {
             case "mute":
@@ -270,6 +324,15 @@ export class WebHostConnector {
                         isMuted: inst.muted,
                         strength,
                     };
+                }
+
+                // Shutdown support (docs/shutdown-spec.md SH10): copied as-is; absent on hosts that predate it.
+                const sd = status.shutdown;
+                const wanted = sd ? {enabled: sd.enabled === true, testMode: sd.testMode === true, phrase: String(sd.phrase ?? "")} : undefined;
+                const have = globalSettings.shutdown;
+                if (wanted?.enabled !== have?.enabled || wanted?.testMode !== have?.testMode || wanted?.phrase !== have?.phrase) {
+                    if (wanted) globalSettings.shutdown = wanted; else delete globalSettings.shutdown;
+                    modified = true;
                 }
 
                 if (modified) {

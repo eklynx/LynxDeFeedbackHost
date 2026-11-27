@@ -2,6 +2,7 @@
     "scripts": {
         "build": "rollup -c",
         "test:encoder": "node test/encoder-sim/run.mjs",
+        "test:shutdown": "node --test test/shutdown-sim/run.mjs",
         "watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.eklynx.sound.defeedback\""
     },
     "type": "module",
