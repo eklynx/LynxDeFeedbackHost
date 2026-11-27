@@ -578,3 +578,29 @@ Built in parallel against the Phase 0 contract (#31 system, #30 API, #32 web pag
 - Verified by hand: a real shutdown (through `NSAppleScript`, with the permission granted) shut the Mac down, so the real shutdown path needs no change; only the priming had the silent-success problem.
 - Not run: UI tests (to leave the screen to the parallel #64 work). The test-mode-off and toggle triggers were not exercised by hand.
 - A user who already denied Automation never gets the prompt again (macOS only asks once); the existing warning and the "Open System Settings" button cover that.
+
+# Stream Deck plugin auto-update and out-of-date warnings (#64)
+
+## Decisions not in the issue
+- **Scope changed twice during the work.** First plan: detection only, because opening a `.streamDeckPlugin` always asks for confirmation. The user then said a silent update is possible (stop the plugin, overwrite its folder, start it) and chose Elgato's CLI for stop/start. So both halves exist: auto-update (on by default, `Host.streamDeckAutoUpdate`, Stream Deck tab toggle) and the warning/error layer for when it is off or fails. See `docs/streamdeck-plugin-spec.md`.
+- **Install behind a seam:** `StreamDeckPluginInstalling` with `StreamDeckCLIInstaller` (real) and `InertStreamDeckPluginInstaller` (XCTest). The CLI, process runner and "is Stream Deck running" are further seams (`StreamDeckCLI.swift`) so the installer is tested with a scripted fake and temp folders.
+- **Order of operations protects the old plugin:** preconditions and unpacking to a scratch folder come first; only after `streamdeck stop` succeeds is the installed folder replaced (atomic `replaceItemAt`). A failed stop or unpack leaves it untouched. If the swap itself fails the restart is still tried to bring the old plugin back.
+- **Runs only at launch, once.** If Stream Deck isn't running then, the update isn't retried later in the session (it reports "Stream Deck isn't running" in the warning); the Install button or a relaunch still works. Turning the toggle on doesn't trigger an update until the next launch.
+- **The CLI is a Node script** (`#!/usr/bin/env node`) and a Finder-launched app has almost no PATH, so the app looks in PATH, Homebrew, `/usr/local`, npm user prefixes, Volta and every nvm Node version, and runs it with its own folder first on PATH (nvm keeps `node` beside it).
+- **New `severity` on every warning** (`warning` default, `error`) in `AppWarning`, `/api/status`, `openapi.yaml` and the web page. Only an installed plugin below `StreamDeckPluginStatus.minimumCompatibleVersion` (0.1.0.0 today, so nothing is flagged yet) is an `error`. The plugin doesn't declare its protocol, so compatibility is decided by version alone; raise the minimum when `WebControlService.protocolVersion` is bumped.
+- **Packaged version via `/usr/bin/unzip -p`**, off the main thread, rather than a new build step or a zip dependency.
+- **Rule ids SP1 to SP15.**
+
+## Not verified
+- **Nothing was run against a real Stream Deck or the real Elgato CLI.** Unverified: that `streamdeck stop <uuid>` / `restart <uuid>` accept this plugin's uuid and behave as the docs say; that Stream Deck picks up the replaced folder on restart; that its Plugins folder is `~/Library/Application Support/com.elgato.StreamDeck/Plugins`; that the CLI runs from the app's environment (PATH, Node 24+) the way the test fake assumes; that the stop/restart return codes reflect failure.
+- The installer's tests use a scripted CLI, temp folders and the real `zip`/`unzip` only.
+- The banner, the tab's toggle and rows, and the web page were not looked at by hand.
+- Whether Stream Deck has finished loading the restarted plugin when the final re-check runs: the check reads the folder, not the running plugin.
+
+## Stamping the plugin version in releases (#64, follow-up in the same PR)
+- **Why:** auto-update compares the packaged plugin's manifest `Version` with the installed one, and the manifest was a hand-edited number that no release step touched. A release that changed plugin code without a bump would never update anyone, and nobody would be warned (the versions match).
+- **Decision (user picked this over a hand-bump plus CI check):** CI stamps the version; nothing is committed back, like the app version. `compute-version.sh` emits `plugin_version` = `X.Y.Z.<commit count>`. The commit count (not the timestamp, too big for a manifest field; not `X.Y.Z` alone, which nightlies share) makes it rise on every build. A shallow clone fails instead of stamping a wrong count.
+- **What changed:** `scripts/stamp-plugin-version.sh` (edits only the top-level `Version`, leaves the Node.js runtime's `"Version": "20"` alone), a workflow step before the archive, and a `verify-release.sh` check on the packed plugin. Spec V14 to V16, SP16.
+- **Gotcha found while testing:** `streamdeck pack` minifies the manifest onto one line, so `verify-release.sh` reads it with `plutil -extract Version raw` instead of matching lines.
+- **Consequence:** local builds keep `0.1.2.0` in the repository, so a developer with a released (higher) plugin installed is never downgraded; the app only updates an older plugin.
+- **Not verified:** the workflow step and the `verify-release.sh` check ran only as a syntax check and against the locally packed zip; they haven't run in a real release. The first release or nightly after merge is the test. Mutation-checked: no.

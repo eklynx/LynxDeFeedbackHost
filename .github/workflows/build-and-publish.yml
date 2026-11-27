@@ -141,6 +141,13 @@ jobs:
       # The archive's install-only run-script phases sign with Developer ID, build the DMG and
       # notarize it (scripts/create-dmg.sh, scripts/notarytool-submit.sh). The app itself is built
       # unsigned here: those phases sign the copy that goes into the DMG.
+      # The plugin is packed into the app by the Xcode build. Stamping the manifest here, in this checkout only
+      # (nothing is committed), is what lets the app tell that an installed plugin is older (issue #64).
+      - name: Stamp the Stream Deck plugin version
+        env:
+          PLUGIN_VERSION: ${{ steps.version.outputs.plugin_version }}
+        run: sh scripts/stamp-plugin-version.sh "$PLUGIN_VERSION"
+
       - name: Archive, sign and notarize
         env:
           MARKETING: ${{ steps.version.outputs.marketing_version }}
@@ -165,10 +172,11 @@ jobs:
           MARKETING: ${{ steps.version.outputs.marketing_version }}
           BUILD: ${{ steps.version.outputs.build_number }}
           FULL: ${{ steps.version.outputs.full_version }}
+          PLUGIN_VERSION: ${{ steps.version.outputs.plugin_version }}
         run: |
           DMG="build/DeFeedbackHost-$FULL.dmg"
           test -f "$DMG" || { echo "::error::$DMG was not produced"; exit 1; }
-          sh scripts/ci/verify-release.sh "$DMG" "$MARKETING" "$BUILD"
+          sh scripts/ci/verify-release.sh "$DMG" "$MARKETING" "$BUILD" "$PLUGIN_VERSION"
           echo "path=$DMG" >> "$GITHUB_OUTPUT"
 
       - name: Keep the DMG with the run (dry run)

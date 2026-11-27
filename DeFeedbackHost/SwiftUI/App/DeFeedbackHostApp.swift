@@ -25,6 +25,7 @@ struct DeFeedbackHostApp: App {
             ContentView(host: host, web: web)
                 .environment(appDelegate.updates)
                 .environment(appDelegate.permissions)
+                .environment(appDelegate.streamDeckPlugin)
         }
         .defaultSize(width: 900, height: 620)
         .commands {
@@ -48,6 +49,7 @@ struct DeFeedbackHostApp: App {
             SettingsView(host: host, web: web)
             .environment(appDelegate.updates)
             .environment(appDelegate.permissions)
+            .environment(appDelegate.streamDeckPlugin)
         }
         // Fixed width, height resizable between the tabs' limits (see SettingsTabFrame.swift).
         .windowResizability(.contentSize)

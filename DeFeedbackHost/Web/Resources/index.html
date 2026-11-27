@@ -317,6 +317,10 @@
     font-size: 0.875rem;
     margin: 0 0 0.5rem;
   }
+  #warnings .warning.error {
+    border-left-color: #dc2626;
+    background: color-mix(in srgb, #dc2626 12%, transparent);
+  }
   #warnings .warning.permission {
     border-left-color: #d97706;
     background: color-mix(in srgb, #d97706 12%, transparent);
@@ -1080,7 +1084,7 @@ function renderWarnings(warnings) {
   box.hidden = list.length === 0;
   box.replaceChildren(...list.map((warning) => {
     const row = document.createElement("p");
-    row.className = "warning " + (warning.kind || "");
+    row.className = "warning " + (warning.kind || "") + " " + (warning.severity === "error" ? "error" : "");
     row.dataset.id = warning.id || "";
     row.append(document.createTextNode(warning.message || ""));
     if (warning.link && /^https:\/\//.test(warning.link)) {

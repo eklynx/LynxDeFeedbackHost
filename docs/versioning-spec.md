@@ -36,6 +36,9 @@ release) and a **nightly** (automatic, when `main` changed). Nightlies carry a `
 | V11 | A pre-release (`VERSION_KIND=prerelease`, label `VERSION_LABEL`, default `beta`) leads to the next release: the latest version bumped by `VERSION_BUMP`, then `-<label>.<N>`. N is one more than the highest existing `v<X.Y.Z>-<label>.<N>` tag (numeric: beta.10 follows beta.9); another label or version starts at 1. | `firstPrerelease`, `prereleaseNumbering`, `prereleaseWithNoTags` |
 | V12 | A pre-release's marketing version stays plain `X.Y.Z`, its tag is `v<full version>`, its channel `prerelease`, its build number the UTC stamp; pre-release and nightly tags never move the latest release. | `firstPrerelease`, `prereleaseTagsDontMoveTheRelease` |
 | V13 | The label is lowercase letters only; anything else exits non-zero with a message and prints nothing. | `prereleaseLabelIsValidated` |
+| V14 | `plugin_version` is `X.Y.Z.<commit count>` (the marketing version plus `git rev-list --count HEAD`), so it rises on every build, nightlies included. `VERSION_COMMIT_COUNT` overrides the count (digits only); a shallow clone without it fails with a message to fetch the full history. | `pluginVersionRisesWithCommits`, `commitCountOverride`, `shallowCloneFails` |
+| V15 | `scripts/stamp-plugin-version.sh <X.Y.Z.N>` writes that version into the Stream Deck manifest's top-level `Version` only, in the working copy. A malformed version, a missing manifest or one without a top-level `Version` exits non-zero and changes nothing. | `stampsOnlyTheTopLevelVersion`, `malformedVersionIsRefused`, `unusableManifestIsAnError` |
+| V16 | The release workflow stamps `plugin_version` before the archive, and `scripts/ci/verify-release.sh` fails the release if the plugin packed in the app has a different version. Checked by the release run itself; not unit-tested. | (release run) |
 
 ## Usage
 
@@ -51,6 +54,9 @@ Checkouts must include the tags: use `actions/checkout` with `fetch-depth: 0`.
 
 ## Notes
 
+- The plugin version is not committed. The manifest in the repository keeps a plain `0.x.y.z` for local builds;
+  CI stamps the real one into its checkout. An installed plugin that is newer than the one in a local build is
+  never downgraded (the app only updates when the installed plugin is older).
 - The build number is passed to `scripts/set-build-number.sh` as `BUILD_NUMBER` so the app, the
   appcast and the artifact names all carry the same value.
 - Gotcha: because a nightly is patch + 1, a nightly built after `v1.0.0` is `1.0.1-…`. If the next

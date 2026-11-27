@@ -1022,17 +1022,25 @@ components:
     Warning:
       type: object
       description: One thing the user should know about.
-      required: [id, kind, message, link, linkTitle]
+      required: [id, kind, severity, message, link, linkTitle]
       properties:
         id:
           type: string
           description: |
             Stable identifier, the same for the same condition every time. In use: `update`,
-            `permission.microphone`, `permission.localNetwork`, `permission.loginItems`.
+            `permission.microphone`, `permission.localNetwork`, `permission.loginItems`,
+            `permission.automation`, `streamDeckPlugin.outOfDate`, `streamDeckPlugin.incompatible`.
           examples: ["permission.localNetwork"]
         kind:
           type: string
-          enum: [update, permission]
+          enum: [update, permission, streamDeckPlugin]
+        severity:
+          type: string
+          enum: [warning, error]
+          description: |
+            `error` means something is broken now (for example the installed Stream Deck plugin can't
+            work with this version of the app); `warning` is something to fix when convenient. Treat a
+            value you don't know as `warning`.
         message:
           type: string
           description: Text to show the user.

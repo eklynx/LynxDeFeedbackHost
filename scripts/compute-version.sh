@@ -11,6 +11,8 @@
 #   VERSION_LABEL      prerelease only: the label, lowercase letters (default beta).
 #   VERSION_TIMESTAMP  UTC build time, yyyyMMddHHmmss. Default: now. Set it to make runs repeatable.
 #   VERSION_SHA        short commit hash. Default: `git rev-parse --short=7 HEAD`.
+#   VERSION_COMMIT_COUNT  digits; the number of commits, the last part of plugin_version. Default:
+#                      `git rev-list --count HEAD`.
 #
 # Output, one key=value per line (and appended to $GITHUB_OUTPUT with --github-output):
 #   marketing_version  plain X.Y.Z. Apple's CFBundleShortVersionString can't hold a suffix.
@@ -22,6 +24,9 @@
 #                      every workflow, and a timestamp does.
 #   tag                vX.Y.Z for a release, nightly-<full_version> for a nightly,
 #                      v<full_version> (e.g. v0.2.0-beta.1) for a prerelease.
+#   plugin_version     X.Y.Z.<commit count>, the version stamped into the Stream Deck plugin's manifest
+#                      (scripts/stamp-plugin-version.sh). Four numbers because the manifest wants them; the
+#                      commit count makes it rise on every build, even nightlies that share an X.Y.Z.
 #   channel            release | nightly | prerelease (the update channel the build goes to).
 #   base_tag           the tag this version was derived from; empty when there was none.
 #
@@ -45,7 +50,7 @@ GITHUB_OUTPUT_FLAG=NO
 while [ $# -gt 0 ]; do
     case "$1" in
         --github-output) GITHUB_OUTPUT_FLAG=YES; shift ;;
-        -h|--help) sed -n '2,39p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,44p' "$0"; exit 0 ;;
         *) die "unknown option: $1" ;;
     esac
 done
@@ -65,6 +70,12 @@ case "${STAMP}" in ''|*[!0-9]*) die "VERSION_TIMESTAMP must be digits only (got 
 
 git rev-parse --git-dir >/dev/null 2>&1 || die "not inside a git repository"
 SHA="${VERSION_SHA:-$(git rev-parse --short=7 HEAD)}"
+
+if [ -z "${VERSION_COMMIT_COUNT:-}" ] && [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+    die "a shallow clone can't count commits for the plugin version; fetch the full history (actions/checkout with fetch-depth: 0)"
+fi
+COMMIT_COUNT="${VERSION_COMMIT_COUNT:-$(git rev-list --count HEAD)}"
+case "${COMMIT_COUNT}" in ''|*[!0-9]*) die "VERSION_COMMIT_COUNT must be digits only (got '${COMMIT_COUNT}')" ;; esac
 
 TAGS="$(git tag --list | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' || true)"
 
@@ -124,6 +135,7 @@ emit() {
 emit marketing_version "${MARKETING}"
 emit full_version "${FULL}"
 emit build_number "${STAMP}"
+emit plugin_version "${MARKETING}.${COMMIT_COUNT}"
 emit tag "${TAG}"
 emit channel "${KIND}"
 emit base_tag "${BASE_TAG}"
