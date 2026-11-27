@@ -304,7 +304,8 @@ paths:
 
         Checks run in this order, and the first one that fails decides the response: shutdown
         support must be enabled (409), the body must be well formed (400), the phrase must match
-        (403). Nothing is shut down unless all pass.
+        (403). Nothing is shut down unless all pass. The enabled check comes first of all, so a
+        disabled host answers 409 even to a request with the wrong `Content-Type`.
 
         In **test mode** (`shutdown.testMode`) every check runs and the response is a normal 202,
         but the computer is not shut down; `test` in the response is `true`. Clients should say
