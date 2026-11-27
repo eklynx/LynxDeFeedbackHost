@@ -11,6 +11,7 @@ Five host settings are individual `UserDefaults` keys in the `com.eklynx.sound.D
 | `Host.bufferSize` | int | `PluginConfiguration.defaultBufferSize` | Must be an offered size; locked while running |
 | `Host.shutdownEnabled` | bool | false | Accept the system shutdown command (`docs/shutdown-spec.md`). Read on every command, applies immediately |
 | `Host.shutdownTestMode` | bool | false (`UserDefaultsShutdownSettings.defaultTestMode`, spec SH1) | When true a shutdown command is only logged, the Mac stays up |
+| `Host.streamDeckAutoUpdate` | bool | true (`UserDefaultsStreamDeckPluginSettings.defaultAutoUpdate`, spec SP11) | At launch, replace an installed Stream Deck plugin that is older than the packaged one (`docs/streamdeck-plugin-spec.md`). When false the app only warns. Read at launch. Tests: `StreamDeckPluginTests` |
 | `Host.shutdownPhrase` | string | `shutdown now` | Exact, case-sensitive safety phrase. An empty value reads as the default; the settings screen refuses to save an empty one. Code: `UserDefaultsShutdownSettings`. Tests: `ShutdownSettingsTests` |
 
 ```

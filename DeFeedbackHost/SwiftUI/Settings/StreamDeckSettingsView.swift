@@ -14,14 +14,19 @@ struct StreamDeckSettingsView: View {
 
     @State private var streamDeckAppURL: URL?
     @State private var pluginURL: URL?
+    @Environment(StreamDeckPluginService.self) private var plugin: StreamDeckPluginService?
+    @AppStorage(UserDefaultsStreamDeckPluginSettings.Key.autoUpdate)
+    private var autoUpdate = UserDefaultsStreamDeckPluginSettings.defaultAutoUpdate
 
     var body: some View {
         Form {
             Section {
+                StreamDeckPluginStatusRows()
                 Button("Install/Update Stream Deck Plugin") {
                     installPlugin()
                 }
                 .disabled(streamDeckAppURL == nil || pluginURL == nil)
+                Toggle("Update the plugin automatically", isOn: $autoUpdate)
             } header: {
                 Text("Plugin")
             } footer: {
@@ -33,6 +38,8 @@ struct StreamDeckSettingsView: View {
         .formStyle(.grouped)
         .settingsTabFrame()
         .onAppear(perform: refreshSteamDeckStatus)
+        // The user may have installed or removed the plugin since the last check.
+        .task { await plugin?.refresh() }
     }
 
     private var footerText: String {
@@ -42,7 +49,12 @@ struct StreamDeckSettingsView: View {
         if pluginURL == nil {
             return "The Stream Deck plugin is missing; please re-download the application."
         }
-        return "Installs or Updates the Stream Deck plugin to control the LynxDeFeedbackHost application."
+        return """
+            Installs or Updates the Stream Deck plugin to control the LynxDeFeedbackHost application. \
+            When automatic update is on and the installed plugin is older than this app's, it is replaced \
+            at launch (needs Stream Deck running and Elgato's streamdeck command-line tool); otherwise \
+            it is flagged in the main window and on the web page.
+            """
     }
 
     /// Make sure the plugin is in the resources directory and the StreamDeck application is installed.

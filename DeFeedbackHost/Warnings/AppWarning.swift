@@ -25,7 +25,12 @@
 //    5. `link`                     -> https only. The web page can open a web page but not System
 //                                     Settings, so System Settings shortcuts live in the native UI.
 //    6. Ids in use                 -> `update`, `permission.microphone`, `permission.localNetwork`,
-//                                     `permission.loginItems`, `permission.automation`.
+//                                     `permission.loginItems`, `permission.automation`,
+//                                     `streamDeckPlugin.outOfDate`, `streamDeckPlugin.incompatible`.
+//    7. `severity`                 -> `warning` (the default) is something to fix when convenient;
+//                                     `error` is something that is broken now (an installed Stream Deck
+//                                     plugin that can't work with this app). Clients that don't know
+//                                     a severity treat it as `warning`.
 //
 import Foundation
 
@@ -34,18 +39,27 @@ struct AppWarning: Equatable, Sendable {
     enum Kind: String, Sendable {
         case updateAvailable = "update"
         case permission
+        case streamDeckPlugin
+    }
+
+    enum Severity: String, Sendable {
+        case warning
+        case error
     }
 
     let id: String
     let kind: Kind
+    let severity: Severity
     let message: String
     /// Optional https link with a label, e.g. the release notes for an update.
     let link: URL?
     let linkTitle: String?
 
-    init(id: String, kind: Kind, message: String, link: URL? = nil, linkTitle: String? = nil) {
+    init(id: String, kind: Kind, severity: Severity = .warning, message: String,
+         link: URL? = nil, linkTitle: String? = nil) {
         self.id = id
         self.kind = kind
+        self.severity = severity
         self.message = message
         self.link = link
         self.linkTitle = linkTitle
@@ -56,6 +70,7 @@ struct AppWarning: Equatable, Sendable {
         [
             "id": id,
             "kind": kind.rawValue,
+            "severity": severity.rawValue,
             "message": message,
             "link": link?.absoluteString ?? NSNull(),
             "linkTitle": linkTitle ?? NSNull()

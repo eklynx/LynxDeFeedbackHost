@@ -62,6 +62,7 @@ struct ContentView: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             VStack(spacing: 0) {
                 PermissionsBanner()
+                StreamDeckPluginBanner()
                 UpdateBanner()
             }
         }

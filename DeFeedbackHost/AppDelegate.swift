@@ -52,6 +52,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                             LoginItemsPermission(),
                                             AutomationPermission(settings: shutdownSettings)])
     }()
+    /// Warns when the Stream Deck plugin Stream Deck has installed is older than the packaged one (issue #64).
+    /// Contract: `StreamDeckPlugin/StreamDeckPluginChecking.swift`. Inert under XCTest.
+    lazy var streamDeckPlugin = StreamDeckPluginService(
+        locator: Self.isRunningUnderXCTest ? InertStreamDeckPluginLocator() : StreamDeckPluginLocator(),
+        installer: Self.isRunningUnderXCTest ? InertStreamDeckPluginInstaller() : StreamDeckCLIInstaller())
     private var heartbeatTimer: Timer?
     private var sigtermSource: DispatchSourceSignal?
 
@@ -100,7 +105,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         web.updateSource = updates
-        web.warningSources = [updates, permissions]
+        web.warningSources = [updates, permissions, streamDeckPlugin]
         web.shutdownSettings = shutdownSettings
         web.systemShutdown = systemShutdown
         if !Self.isRunningUnderXCTest {
@@ -112,10 +117,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 await AutomationPriming(settings: shutdownSettings).primeIfNeeded()
                 await permissions.start()
             }
+            Task { await streamDeckPlugin.start() }
             // A grant made in System Settings while we run shows up when the user comes back.
             NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification,
-                                                   object: nil, queue: .main) { [permissions] _ in
-                Task { @MainActor in await permissions.refresh() }
+                                                   object: nil, queue: .main) { [permissions, streamDeckPlugin] _ in
+                Task { @MainActor in
+                    await permissions.refresh()
+                    await streamDeckPlugin.refresh()
+                }
             }
         }
 
