@@ -460,3 +460,17 @@ Every workflow that needs a Mac now takes the same optional `runner` input on a 
 
 ## Status
 SwiftLint baseline: 0 entries, file removed. Issue #41's "finished when" is met once this merges; closing it is left to the maintainer.
+
+# SwiftUI files in their own folder
+
+## What I changed
+The eleven loose SwiftUI files moved from the top of `DeFeedbackHost/` into `DeFeedbackHost/SwiftUI/`, in subfolders by area: `App` (`DeFeedbackHostApp`), `Main` (`ContentView`, `EngineControlBar`, `InstanceGallery`, `LoadReadout`), `Instances` (`InstanceView`, `InstanceChooserView`, `PluginUIView`), `Settings` (`GeneralSettingsView`, `StreamDeckSettingsView`), `About` (`AboutView`). They were moved with `git mv`, so history follows them.
+
+## Decisions
+- **Top-level files only.** `Permissions/PermissionViews.swift`, `Updates/UpdateViews.swift` and `Web/ServerSettingsView.swift` stay beside the services they present, as chosen.
+- **The `Logger` extension left the app file.** `DeFeedbackHostApp.swift` also defined `Logger.ui`, `.host_application`, `.audio` and `.webserver`, which are not SwiftUI; they moved verbatim to `DeFeedbackHost/Logging.swift`. This is the only code-level change.
+- **Models stay out.** `PluginInstance` and `PluginUI` import SwiftUI/AppKit only for `@Observable` and view-controller types, so they stayed.
+- No Xcode project edit: the app target uses a file-system-synchronized folder, so it picked the new paths up by itself (the build proves it). One test comment pointing at `AboutView.swift` was updated.
+
+## Verification
+Renames only (the moved files are 100% identical except the app file, which lost the `Logger` block); the full `DeFeedbackHostTests` run, a Release build and `swiftlint lint --strict` all pass.
