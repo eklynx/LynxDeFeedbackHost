@@ -283,3 +283,50 @@ struct VersionScriptTests {
         #expect(try prerelease(repo).values["full_version"] == "1.0.0-beta.1")
     }
 }
+
+/// The Stream Deck plugin's version (issue #64): docs/versioning-spec.md V14.
+struct PluginVersionOutputTests {
+
+    @Test("V14: plugin_version is the marketing version plus the commit count, and rises with every commit")
+    func pluginVersionRisesWithCommits() throws {
+        let repo = try makeRepo(tags: ["v1.4.7"])
+        defer { try? FileManager.default.removeItem(at: repo) }
+        #expect(try compute(in: repo).values["plugin_version"] == "1.4.8.1")
+
+        try git(["commit", "-q", "--allow-empty", "-m", "second"], in: repo)
+        #expect(try compute(in: repo).values["plugin_version"] == "1.4.8.2")
+        // A nightly shares the release's X.Y.Z, so only the commit count tells them apart.
+        #expect(try compute(in: repo, kind: "nightly").values["plugin_version"] == "1.4.8.2")
+        #expect(try compute(in: repo, kind: "prerelease").values["plugin_version"] == "1.4.8.2")
+    }
+
+    @Test("V14: VERSION_COMMIT_COUNT overrides the count; anything but digits is refused")
+    func commitCountOverride() throws {
+        let repo = try makeRepo(tags: ["v1.4.7"])
+        defer { try? FileManager.default.removeItem(at: repo) }
+        #expect(try compute(in: repo, extra: ["VERSION_COMMIT_COUNT": "77"]).values["plugin_version"] == "1.4.8.77")
+
+        let bad = try compute(in: repo, extra: ["VERSION_COMMIT_COUNT": "7x"])
+        #expect(bad.status != 0)
+        #expect(bad.error.contains("VERSION_COMMIT_COUNT"), "\(bad.error)")
+        #expect(bad.output.isEmpty)
+    }
+
+    @Test("V14: a shallow clone can't count commits, so it fails instead of stamping a wrong number")
+    func shallowCloneFails() throws {
+        let repo = try makeRepo(tags: [])
+        defer { try? FileManager.default.removeItem(at: repo) }
+        try git(["commit", "-q", "--allow-empty", "-m", "second"], in: repo)
+        try git(["tag", "v1.0.0"], in: repo)
+        let clone = FileManager.default.temporaryDirectory.appending(path: "VersionScriptTests-clone-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: clone) }
+        try git(["clone", "-q", "--depth", "1", "file://\(repo.path)", clone.path], in: repo)
+
+        let run = try compute(in: clone)
+        #expect(run.status != 0)
+        #expect(run.error.contains("shallow"), "\(run.error)")
+        #expect(run.output.isEmpty)
+        // With the count supplied there is nothing to get wrong.
+        #expect(try compute(in: clone, extra: ["VERSION_COMMIT_COUNT": "5"]).values["plugin_version"] == "1.0.1.5")
+    }
+}

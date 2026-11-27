@@ -596,3 +596,11 @@ Built in parallel against the Phase 0 contract (#31 system, #30 API, #32 web pag
 - The installer's tests use a scripted CLI, temp folders and the real `zip`/`unzip` only.
 - The banner, the tab's toggle and rows, and the web page were not looked at by hand.
 - Whether Stream Deck has finished loading the restarted plugin when the final re-check runs: the check reads the folder, not the running plugin.
+
+## Stamping the plugin version in releases (#64, follow-up in the same PR)
+- **Why:** auto-update compares the packaged plugin's manifest `Version` with the installed one, and the manifest was a hand-edited number that no release step touched. A release that changed plugin code without a bump would never update anyone, and nobody would be warned (the versions match).
+- **Decision (user picked this over a hand-bump plus CI check):** CI stamps the version; nothing is committed back, like the app version. `compute-version.sh` emits `plugin_version` = `X.Y.Z.<commit count>`. The commit count (not the timestamp, too big for a manifest field; not `X.Y.Z` alone, which nightlies share) makes it rise on every build. A shallow clone fails instead of stamping a wrong count.
+- **What changed:** `scripts/stamp-plugin-version.sh` (edits only the top-level `Version`, leaves the Node.js runtime's `"Version": "20"` alone), a workflow step before the archive, and a `verify-release.sh` check on the packed plugin. Spec V14 to V16, SP16.
+- **Gotcha found while testing:** `streamdeck pack` minifies the manifest onto one line, so `verify-release.sh` reads it with `plutil -extract Version raw` instead of matching lines.
+- **Consequence:** local builds keep `0.1.2.0` in the repository, so a developer with a released (higher) plugin installed is never downgraded; the app only updates an older plugin.
+- **Not verified:** the workflow step and the `verify-release.sh` check ran only as a syntax check and against the locally packed zip; they haven't run in a real release. The first release or nightly after merge is the test. Mutation-checked: no.
