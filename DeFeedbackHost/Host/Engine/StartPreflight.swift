@@ -14,6 +14,8 @@
 //    2. (microphone access, asked by the session) -> `.microphoneAccessDenied`.
 //    3. `sampleRate`: either rate missing -> `.sampleRateUnavailable(<output device name>)`; the two
 //       rates differing by more than 0.5 Hz -> `.sampleRateMismatch`; otherwise the output rate.
+//    4. `bufferSize`: 96 kHz or higher with a buffer under 64 samples -> `.bufferTooSmallForSampleRate`
+//       (the plugin cannot be set up like that).
 
 import Foundation
 
@@ -52,5 +54,14 @@ enum StartPreflight {
             throw AudioHostError.sampleRateMismatch(input: inputRate, output: outputRate)
         }
         return outputRate
+    }
+
+    /// The plugin refuses a small buffer at a high sample rate, so refuse before touching hardware
+    /// rather than after changing the devices.
+    static func bufferSize(_ settings: EngineStartSettings, sampleRate: Double) throws {
+        if PluginConfiguration.bufferSizeProblem(bufferSize: settings.bufferSize,
+                                                 sampleRate: sampleRate) != nil {
+            throw AudioHostError.bufferTooSmallForSampleRate(bufferSize: settings.bufferSize)
+        }
     }
 }

@@ -136,6 +136,34 @@ nonisolated enum PluginConfiguration {
 
     static let defaultBufferSize = 128
 
+    /// The De-Feedback plugin cannot be set up at 96 kHz or higher with the smallest buffer. Measured
+    /// by attaching the real plugin to the engine: at 96 kHz a 32-frame buffer is refused and 64,
+    /// 128 and 256 are accepted; at 48 kHz 32 is fine. So from this rate up, the buffer has a floor.
+    static let highSampleRateThreshold = 96_000.0
+    static let minimumBufferAtHighSampleRate = 64
+
+    /// The smallest buffer the plugin takes at `rate`, or nil when the rate has no floor beyond the
+    /// sizes on offer. The 0.5 Hz tolerance is the one every rate comparison in the host uses, so a
+    /// rate that round-tripped through the HAL as 95999.7 still counts as 96 kHz.
+    static func minimumBufferSize(forSampleRate rate: Double) -> Int? {
+        rate >= highSampleRateThreshold - 0.5 ? minimumBufferAtHighSampleRate : nil
+    }
+
+    /// The sentence shown when the buffer is below the floor for the rate (in the window next to
+    /// Run, in the web API's blocked reason, and when a start is refused).
+    static func highSampleRateBufferMessage(bufferSize: Int) -> String {
+        "At \(Int(highSampleRateThreshold)) Hz and above the buffer must be at least " // TODO: localize string
+            + "\(minimumBufferAtHighSampleRate) samples; it is \(bufferSize)."
+    }
+
+    /// Nil when `bufferSize` is fine at `sampleRate` (or there is no rate yet), else the sentence.
+    static func bufferSizeProblem(bufferSize: Int, sampleRate: Double?) -> String? {
+        guard let sampleRate,
+              let minimum = minimumBufferSize(forSampleRate: sampleRate),
+              bufferSize < minimum else { return nil }
+        return highSampleRateBufferMessage(bufferSize: bufferSize)
+    }
+
     /// How many buffers' worth of slack the I/O ring buffer carries.
     static let ringBufferDepthInBuffers = 8
 

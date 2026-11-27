@@ -112,6 +112,13 @@ extension AudioHost {
         deviceSelection.bufferRanges.range(for: direction)
     }
 
+    /// Why the selected buffer is too small for the selected sample rate, or nil. The plugin can't be
+    /// set up at 96 kHz or higher with less than 64 samples.
+    var bufferSizeProblem: String? {
+        PluginConfiguration.bufferSizeProblem(bufferSize: bufferSize,
+                                              sampleRate: selectedOutputSampleRate ?? selectedInputSampleRate)
+    }
+
     /// Gets a list of devices that are rejecting the selected buffer size.
     var devicesRejectingBufferSize: [String] {
         deviceSelection.bufferRanges.devicesRejecting(bufferSize,
