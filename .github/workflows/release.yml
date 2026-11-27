@@ -16,6 +16,10 @@ on:
         description: 'Build, sign and notarize, but publish nothing (no tag, Release or appcast). The DMG is attached to the run.'
         type: boolean
         default: false
+      runner:
+        description: 'Runner override as JSON, e.g. "xcode-27" or ["self-hosted","macOS","ARM64"]. Empty uses the RUNNER_LABEL variable, then xcode-27.'
+        required: false
+        default: ''
 
 # One build at a time (releases and nightlies share the group), never cancelled half way.
 concurrency:
@@ -39,3 +43,4 @@ jobs:
       kind: release
       bump: ${{ inputs.bump }}
       dry_run: ${{ inputs.dry_run }}
+      runner: ${{ inputs.runner }}

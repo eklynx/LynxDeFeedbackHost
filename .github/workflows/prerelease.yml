@@ -25,6 +25,10 @@ on:
         description: 'How many pre-releases to keep'
         type: string
         default: "10"
+      runner:
+        description: 'Runner override as JSON, e.g. "xcode-27" or ["self-hosted","macOS","ARM64"]. Empty uses the RUNNER_LABEL variable, then xcode-27.'
+        required: false
+        default: ''
 
 # One build at a time (releases, nightlies and pre-releases share the group), never cancelled half way.
 concurrency:
@@ -47,6 +51,7 @@ jobs:
       bump: ${{ inputs.bump }}
       label: ${{ inputs.label }}
       dry_run: ${{ inputs.dry_run }}
+      runner: ${{ inputs.runner }}
 
   prune:
     name: Keep only the newest pre-releases
