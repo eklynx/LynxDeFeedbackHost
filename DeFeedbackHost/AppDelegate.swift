@@ -101,6 +101,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         web.updateSource = updates
         web.warningSources = [updates, permissions]
+        web.shutdownSettings = shutdownSettings
+        web.systemShutdown = systemShutdown
         if !Self.isRunningUnderXCTest {
             updates.start()   // probes now only if the user opted in
 

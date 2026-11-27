@@ -5,5 +5,5 @@
 		"rootDir": "../..",
 		"outDir": "../../build/encoder-sim"
 	},
-	"include": ["../../src/**/*.ts", "entry.ts"]
+	"include": ["../../src/**/*.ts", "entry.ts", "../shutdown-sim/entry.ts"]
 }

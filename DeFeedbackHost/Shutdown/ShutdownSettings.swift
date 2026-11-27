@@ -30,8 +30,8 @@
 //  Error / edge cases
 //    2. `phrase` is never empty. An empty or missing stored value reads as
 //       `ShutdownPhrase.defaultPhrase`, and the settings screen refuses to save an empty one.
-//    3. Defaults for a fresh install: disabled, and test mode ON while the feature is being
-//       built. Before release the test-mode default flips to OFF (spec rule SH1, tracked in #29).
+//    3. Defaults for a fresh install: disabled, and test mode OFF (spec rule SH1). A user who wants
+//       to try the flow without shutting the Mac down turns test mode on first.
 //    4. Reading never throws and never prompts.
 //
 //  Other pieces of the namespace:

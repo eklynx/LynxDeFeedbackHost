@@ -321,6 +321,47 @@
     border-left-color: #d97706;
     background: color-mix(in srgb, #d97706 12%, transparent);
   }
+
+  /* The Shutdown section: a native <details>, so it is collapsed until opened and keyboard
+     accessible without JS. Hidden entirely while status.shutdown.enabled is false. */
+  #shutdown[hidden] { display: none; }
+  #shutdown summary { cursor: pointer; font-weight: 600; display: flex; gap: 0.6rem; align-items: baseline; }
+  #shutdown .test-badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--warn);
+    border: 1px solid var(--warn);
+    border-radius: 0.6rem;
+    padding: 0 0.45rem;
+  }
+  #shutdown .test-badge[hidden] { display: none; }
+  #shutdown-body { margin-top: 0.8rem; }
+  #shutdown-body p { margin: 0 0 0.6rem; font-size: 0.875rem; }
+  /* The phrase to type: its own line, in a chip with a red edge, so it stands out from the sentence around it.
+     pre-wrap keeps leading and trailing spaces visible, because the match is exact. */
+  #shutdown-phrase {
+    display: inline-block;
+    max-width: 100%;
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--bad);
+    border-radius: 0.4rem;
+    padding: 0.3rem 0.7rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: all;
+  }
+  #shutdown-body #shutdown-phrase-line { margin-bottom: 0.8rem; }
+  #shutdown-text { font: inherit; width: 100%; margin-bottom: 0.6rem; }
+  #shutdown-send { color: #fff; background: var(--bad); border-color: var(--bad); }
+  #shutdown-result { margin: 0.6rem 0 0; font-size: 0.875rem; }
+  #shutdown-result.test { color: var(--warn); }
+  #shutdown-result.error { color: var(--bad); }
+  #shutdown-result[hidden] { display: none; }
 </style>
 </head>
 <body>
@@ -390,6 +431,20 @@
       <dt>Peak</dt><dd id="peak">—</dd>
       <dt>Instances</dt><dd id="instances">—</dd>
     </dl>
+  </section>
+  <!-- Written by `renderShutdown` from status.shutdown. Hidden while shutdown support is off. -->
+  <section class="panel" id="shutdown" aria-label="Shutdown" hidden>
+    <details id="shutdown-details">
+      <summary>Shutdown <span class="test-badge" id="shutdown-test" hidden>test mode</span></summary>
+      <div id="shutdown-body">
+        <p>To enable the button, type this exact phrase:</p>
+        <p id="shutdown-phrase-line"><code id="shutdown-phrase"></code></p>
+        <input type="text" id="shutdown-text" autocomplete="off" autocapitalize="off"
+               autocorrect="off" spellcheck="false" aria-label="Shutdown phrase">
+        <button type="button" class="small" id="shutdown-send" disabled>Shutdown</button>
+        <p id="shutdown-result" role="status" hidden></p>
+      </div>
+    </details>
   </section>
 </main>
 
@@ -1092,6 +1147,7 @@ function render() {
        : "Input and output must run at the same rate before the host can start");
 
   renderInstances(status);
+  renderShutdown();
 
   el("underruns").textContent = status.underruns ?? "—";
   el("peak").textContent = status.hasRendered ? percent(status.peakDspLoad) : "—";
@@ -1232,6 +1288,72 @@ button.addEventListener("click", async () => {
   } finally {
     busy = false;
     render();
+  }
+});
+
+// BEGIN shutdownPhraseMatches (extracted and run by the webPhraseMatch test; keep it pure)
+/* Mirrors ShutdownPhrase.matches: exact, case-sensitive, nothing trimmed. */
+function shutdownPhraseMatches(typed, phrase) {
+  return typed === phrase;
+}
+// END shutdownPhraseMatches
+
+let shutdownSending = false;
+
+function updateShutdownButton() {
+  const info = status && status.shutdown;
+  el("shutdown-send").disabled =
+    shutdownSending || !info || !shutdownPhraseMatches(el("shutdown-text").value, info.phrase);
+}
+
+function showShutdownResult(message, kind) {
+  const line = el("shutdown-result");
+  line.textContent = message || "";
+  line.className = kind || "";
+  line.hidden = !message;
+}
+
+function renderShutdown() {
+  const info = status.shutdown;
+  const section = el("shutdown");
+  section.hidden = !(info && info.enabled === true);
+  if (section.hidden) return;
+  // Only the text is replaced; the text box is left alone so a status event never eats typing.
+  el("shutdown-phrase").textContent = info.phrase;
+  el("shutdown-test").hidden = info.testMode !== true;
+  updateShutdownButton();
+}
+
+el("shutdown-text").addEventListener("input", updateShutdownButton);
+
+el("shutdown-send").addEventListener("click", async () => {
+  const info = status && status.shutdown;
+  const typed = el("shutdown-text").value;
+  if (!info || shutdownSending || !shutdownPhraseMatches(typed, info.phrase)) return;
+
+  shutdownSending = true;
+  updateShutdownButton();
+  showShutdownResult("Sending…", "");
+  try {
+    const response = await fetch("/api/shutdown", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phrase: typed })
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      showShutdownResult(body.error || ("Request failed: " + response.status), "error");
+    } else if (body.test === true) {
+      showShutdownResult("TEST: the shutdown was checked and recorded, but the computer is NOT shutting down.", "test");
+    } else {
+      showShutdownResult("The computer is shutting down.", "");
+    }
+  } catch (error) {
+    showShutdownResult("Couldn't reach the host: " + error.message, "error");
+  } finally {
+    el("shutdown-text").value = "";
+    shutdownSending = false;
+    updateShutdownButton();
   }
 });
 

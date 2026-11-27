@@ -507,8 +507,32 @@ New `DeFeedbackHost/Shutdown/` namespace with the contract the four sub-issues (
 - The stub route returns 501 and the stub status reports `enabled: false, testMode: true`. #30 replaces both; nothing else touches `WebRoutes.swift`, `WebStatusPayload.swift` or `openapi.yaml` for this feature.
 
 ## Things to remember
-- **Test mode defaults to ON during development. A final task before release flips the default to OFF** (SH1, tracked in #29).
+- Test mode was ON by default during development; it is now OFF by default (SH1).
 - The phrase is not a secret: it is in the status payload on purpose.
 
 ## Verification
 `OpenAPIConformanceTests` pass, `swiftlint lint --strict` is clean on the touched files, and `redocly lint` validates `openapi.yaml` (one existing license warning).
+
+# System shutdown (#29): the four parts
+
+Built in parallel against the Phase 0 contract (#31 system, #30 API, #32 web page, #33 Stream Deck) and merged in that order; the app wiring (`AppDelegate` sets `shutdownSettings` and `systemShutdown` on the web service) was added at merge.
+
+## Decisions not in the issues
+- **#30, order vs content type:** the disabled check runs before the Content-Type check, so a disabled app answers 409 even to a wrong Content-Type; an enabled app still answers 415.
+- **#30, missing wiring:** a nil `shutdownSettings` behaves as disabled; enabled with a matching phrase but no `systemShutdown` is a 500 ("no shutdown mechanism is available"). Only bad wiring can cause it.
+- **#30, `test` flag:** present only in the 202 body; `GET /api/status` and the status event carry `shutdown {enabled, testMode, phrase}` but not `test`.
+- **#31, Automation warning timing:** SH5 lives inside the checker (it reports granted unless shutdown is enabled with test mode off). It updates on `PermissionService.refresh()` (app becomes active), so toggling in Settings takes effect on the next activation, not instantly. The Automation row only shows while it needs attention.
+- **#31, System Events:** the authorizer launches System Events hidden if it isn't running (the permission query returns -600 otherwise); -600 and other unexpected statuses read as unknown and never warn.
+- **#31, phrase field:** saves on every valid edit; an empty phrase is refused and the last saved phrase stays in use. Opening the screen does not write the default phrase.
+- **#31, build settings:** `AUTOMATION_APPLE_EVENTS = YES` (entitlement) and `INFOPLIST_KEY_NSAppleEventsUsageDescription`, in both configurations. Not verifiable in an unsigned build.
+- **#32, web page:** the section is a native `<details>`, hidden entirely when disabled; the button is also disabled while a request is in flight; the box clears after every send; no extra confirm dialog on top of the typed phrase. The page's phrase check is tested by running the shipped function in JavaScriptCore.
+- **#33, Stream Deck:** any registry change during a hold (a key appearing or disappearing) fails the attempt, which is how page and folder changes are detected; a wrong press is consumed (its normal action does not run); every failure flashes the alert for 1.5 s; a status with no `shutdown` object reads as disabled (grey); an empty phrase alerts and sends nothing; there is no fallback to the app's phrase.
+- **Merge:** #30 and #32 both created `WebShutdownTests.swift`; #32's tests moved to `WebShutdownPageTests.swift`.
+
+## Not verified
+- No physical Stream Deck: real key images and SDK event ordering are untested.
+- The web page was not run in a browser against the live API; the real AppleScript shutdown and the Automation prompt were not run.
+- `DmgScriptTests/makesARealImage` failed once in the full run and once on its own on the merged tree, and passed on the base commit and in other runs. It does not touch this feature; treat it as intermittent until shown otherwise.
+
+## Before release
+- Done: the test-mode default is now OFF (`UserDefaultsShutdownSettings.defaultTestMode`, spec SH1, the `settingsDefaults` test, `docs/cli-settings-spec.md`). Anyone testing the flow must turn test mode on in Settings first.

@@ -1,5 +1,7 @@
 import streamDeck, {
 	action,
+	KeyUpEvent,
+	WillDisappearEvent,
 	DidReceiveSettingsEvent,
 	KeyAction,
 	KeyDownEvent,
@@ -14,6 +16,7 @@ import path from 'path';
 import {hostDataUpdateEventBus, HostSettingsUpdatedEventEmitter} from "../HostSettingsUpdatedEvent";
 import {GlobalSettings} from "../GlobalSettings";
 import {getConnector} from "../connectorState";
+import {keyRegistry, shutdownSequence} from "../shutdown/shutdownRuntime";
 import {BypassCommand} from "../WebHostConnector";
 
 function readBypassSvgFile(): string {
@@ -50,6 +53,7 @@ export class Bypass extends SingletonAction<BypassSettings> {
 		return await Bypass.updateActionFromEvent(ev, globalSettings);
 	}
 	override async onWillAppear(ev: WillAppearEvent<BypassSettings>): Promise<void> {
+		keyRegistry.appear(ev.action.id, "bypass", ev.action as KeyAction<JsonObject>, ev.action.device.id);
 		const globalSettings: GlobalSettings = await streamDeck.settings.getGlobalSettings();
 		return await Bypass.updateActionFromEvent(ev, globalSettings);
 	}
@@ -80,7 +84,16 @@ export class Bypass extends SingletonAction<BypassSettings> {
 		return action.setTitle(instanceName ?? "???");
 	}
 
+	override onWillDisappear(ev: WillDisappearEvent<BypassSettings>): void {
+		keyRegistry.disappear(ev.action.id);
+	}
+
+	override onKeyUp(ev: KeyUpEvent<BypassSettings>): void {
+		shutdownSequence.keyUp(ev.action.id);   // a magic tap of a shutdown attempt: nothing else to do
+	}
+
 	override async onKeyDown(ev: KeyDownEvent<BypassSettings>): Promise<void> {
+		if (shutdownSequence.keyDown(ev.action.id)) return;   // consumed by a shutdown attempt (docs/shutdown-spec.md SH18)
 		const { settings } = ev.payload;
 		if (settings.instanceName == null) { // TODO: ERROR image
 			return;

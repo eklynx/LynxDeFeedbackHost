@@ -52,6 +52,43 @@ extension WebControlService {
         }
     }
 
+    // MARK: - Shutdown
+
+    /// `POST /api/shutdown` (spec rules SH6 to SH9). Checks run in order, the first failure decides:
+    /// disabled (409), body not `{"phrase": string}` (400), wrong phrase (403). Only then is
+    /// `SystemShutdown.perform()` called; the response says whether that was only a test.
+    func shutdownSystem(_ request: HTTPRequest) async -> HTTPResponse {
+        await HTTPResponse.catching {
+            guard let settings = shutdownSettings, settings.isEnabled else {
+                throw WebRejection(409, WebErrorStrings.ShutdownDisabled.rawValue)
+            }
+            let body = try WebRequestValidation.jsonBody(request)
+            guard let phrase = body["phrase"] as? String else {
+                throw WebRejection(400, WebErrorStrings.ExpectedPhrase.rawValue)
+            }
+            guard ShutdownPhrase.matches(phrase, expected: settings.phrase) else {
+                throw WebRejection(403, WebErrorStrings.WrongPhrase.rawValue)
+            }
+            guard let shutdown = systemShutdown else {
+                throw WebRejection(500, WebErrorStrings.shutdownFailed("no shutdown mechanism is available."))
+            }
+
+            let isTest = shutdown.isTestMode
+            do {
+                try await shutdown.perform()
+            } catch ShutdownError.notPermitted {
+                throw WebRejection(500, WebErrorStrings.ShutdownNotPermitted.rawValue)
+            } catch ShutdownError.failed(let reason) {
+                throw WebRejection(500, WebErrorStrings.shutdownFailed(reason))
+            }
+
+            pushStatus(force: true)
+            var payload = statusPayload()
+            payload["test"] = isTest
+            return .json(payload, status: 202)
+        }
+    }
+
     // MARK: - Devices, sample rate, buffer size
 
     func setDevices(_ request: HTTPRequest) async -> HTTPResponse {

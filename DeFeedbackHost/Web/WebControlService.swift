@@ -40,6 +40,19 @@ final class WebControlService {
     /// `warnings` array of every status payload. Set by the app delegate.
     @ObservationIgnored var warningSources: [WarningSource] = []
 
+    /// The shutdown settings behind `POST /api/shutdown` and the status `shutdown` object. Set by the
+    /// app delegate; nil (tests, previews) behaves as shutdown disabled. The command always reads
+    /// these live; the status snapshot reads them through a one-second cache (`statusShutdownSettings`).
+    @ObservationIgnored var shutdownSettings: ShutdownSettings? {
+        didSet { statusShutdownSettings = shutdownSettings.map { CachedShutdownSettings($0) } }
+    }
+
+    /// Display-only view of `shutdownSettings` for the status snapshot, which is rebuilt several times a second.
+    @ObservationIgnored private var statusShutdownSettings: CachedShutdownSettings?
+
+    /// Performs the shutdown once every check has passed. Set by the app delegate.
+    @ObservationIgnored var systemShutdown: SystemShutdown?
+
     @ObservationIgnored private var server: HTTPServer?
     @ObservationIgnored private let events = EventStream()
     @ObservationIgnored private let authGuard = BasicAuth.Guard()
@@ -231,7 +244,8 @@ final class WebControlService {
     func statusPayload() -> [String: Any] { payloads.status() }
 
     private var payloads: WebStatusPayload {
-        WebStatusPayload(host: host, updateSource: updateSource, warningSources: warningSources)
+        WebStatusPayload(host: host, updateSource: updateSource, warningSources: warningSources,
+                         shutdownSettings: statusShutdownSettings)
     }
 
     func attachStream(_ stream: HTTPStream) {

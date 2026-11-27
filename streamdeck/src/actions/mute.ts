@@ -1,5 +1,7 @@
 import streamDeck, {
 	action,
+	KeyUpEvent,
+	WillDisappearEvent,
 	DidReceiveSettingsEvent, KeyAction,
 	KeyDownEvent,
 	SingletonAction,
@@ -14,6 +16,7 @@ import {Key} from "node:readline";
 import {GlobalSettings} from "../GlobalSettings";
 import {BypassCommand, MuteCommand} from "../WebHostConnector";
 import {getConnector} from "../connectorState";
+import {keyRegistry, shutdownSequence} from "../shutdown/shutdownRuntime";
 import {hostDataUpdateEventBus, HostSettingsUpdatedEventEmitter} from "../HostSettingsUpdatedEvent";
 
 function readMuteSvgFile(): string {
@@ -49,6 +52,7 @@ export class Mute extends SingletonAction<MuteSettings> {
 		return await this.updateActionFromEvent(ev, globalSettings);
 	}
 	override async onWillAppear(ev: WillAppearEvent<MuteSettings>): Promise<void> {
+		keyRegistry.appear(ev.action.id, "mute", ev.action as KeyAction<JsonObject>, ev.action.device.id);
 		const globalSettings: GlobalSettings = await streamDeck.settings.getGlobalSettings();
 		return await this.updateActionFromEvent(ev, globalSettings);
 	}
@@ -87,7 +91,16 @@ export class Mute extends SingletonAction<MuteSettings> {
 		return action.setTitle(instanceName ?? "???");
 	}
 
+	override onWillDisappear(ev: WillDisappearEvent<MuteSettings>): void {
+		keyRegistry.disappear(ev.action.id);
+	}
+
+	override onKeyUp(ev: KeyUpEvent<MuteSettings>): void {
+		shutdownSequence.keyUp(ev.action.id);   // a magic tap of a shutdown attempt: nothing else to do
+	}
+
 	override async onKeyDown(ev: KeyDownEvent<MuteSettings>): Promise<void> {
+		if (shutdownSequence.keyDown(ev.action.id)) return;   // consumed by a shutdown attempt (docs/shutdown-spec.md SH18)
 		const { settings } = ev.payload;
 
 		if (settings.instanceName == null) { // TODO: ERROR image

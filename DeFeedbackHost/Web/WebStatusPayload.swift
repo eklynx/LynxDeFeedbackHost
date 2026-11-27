@@ -21,6 +21,9 @@ struct WebStatusPayload {
     /// Everything that has something to warn about, in source order.
     let warningSources: [WarningSource]
 
+    /// The shutdown settings the `shutdown` object reports; nil reports shutdown as disabled.
+    var shutdownSettings: ShutdownSettings?
+
     /// `GET /api/update`. Never triggers a check; reports what the app already knows.
     func update() -> [String: Any] {
         let status = updateSource?.updateStatus ?? UpdateStatus()
@@ -39,10 +42,16 @@ struct WebStatusPayload {
         warningSources.flatMap(\.warnings).map(\.jsonObject)
     }
 
-    /// Contract stub (issue #29): #30 reads the real `ShutdownSettings` here. Kept out of `status()`
-    /// so the conformance test sees one `shutdown` key, documented through `ShutdownStatus`.
+    /// The `shutdown` object of the status payload (spec rule SH10), read live from the settings.
+    /// With no settings injected (tests, previews) shutdown reports as disabled with the default phrase.
+    /// Kept out of `status()` so the conformance test sees one `shutdown` key, documented through
+    /// `ShutdownStatus`.
     func shutdownStatus() -> [String: Any] {
-        ["enabled": false, "testMode": true, "phrase": ShutdownPhrase.defaultPhrase]
+        [
+            "enabled": shutdownSettings?.isEnabled ?? false,
+            "testMode": shutdownSettings?.isTestMode ?? UserDefaultsShutdownSettings.defaultTestMode,
+            "phrase": shutdownSettings?.phrase ?? ShutdownPhrase.defaultPhrase
+        ]
     }
 
     /// gets the status of the host.  All values are retrieved from the host even if they could be calculated locally.

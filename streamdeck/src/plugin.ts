@@ -3,18 +3,20 @@ import streamDeck from "@elgato/streamdeck";
 import {Mute} from "./actions/mute";
 import {Bypass} from "./actions/bypass";
 import {Strength} from "./actions/strength";
+import {Shutdown} from "./actions/shutdown";
 import "./actions/iconRefreshListener";
 import {WebHostConnector} from "./WebHostConnector";
 import {getConnector, setConnector} from "./connectorState";
 import {CURRENT_VERSION, GlobalSettings} from "./GlobalSettings";
 
 // We can enable "trace" logging so that all messages between the Stream Deck, and the plugin are recorded. When storing sensitive information
-streamDeck.logger.setLevel("info");
+streamDeck.logger.setLevel("debug");   // debug level on: the shutdown puzzle logs each magic key pick (#29)
 
 // Register the increment action.
 streamDeck.actions.registerAction(new Mute());
 streamDeck.actions.registerAction(new Bypass());
 streamDeck.actions.registerAction(new Strength());
+streamDeck.actions.registerAction(new Shutdown());
 
 
 const defaultSettings: GlobalSettings = {

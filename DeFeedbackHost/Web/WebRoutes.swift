@@ -91,10 +91,9 @@ enum WebRoutes {
         .respond(await service.controlSystem(request))
     }
 
-    /// Contract stub (issue #29): #30 replaces this with the real handler. See docs/shutdown-spec.md.
     private static func shutdown(_ service: WebControlService, _ request: HTTPRequest,
-                                 _ id: String?) -> HTTPServer.RouteOutcome {
-        .respond(.error(501, "Shutdown is not implemented yet"))
+                                 _ id: String?) async -> HTTPServer.RouteOutcome {
+        .respond(await service.shutdownSystem(request))
     }
 
     private static func devices(_ service: WebControlService, _ request: HTTPRequest,

@@ -19,6 +19,7 @@ export type Instance = {
 };
 
 export type Status = {
+    shutdown?: { enabled: boolean; testMode: boolean; phrase: string };
     protocol: number;
     running: boolean;
     canStart: boolean;
