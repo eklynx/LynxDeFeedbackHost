@@ -307,7 +307,9 @@ struct ReleaseScriptTests {
     func dryRunPublishesNothing() throws {
         let steps = try releaseSteps()
         let publishing = steps.filter {
-            $0.contains("publish-update.sh") || $0.contains("git push") || $0.contains("gh release")
+            // `gh release list` only reads (it feeds the changelog's start tag), so it runs on a dry run too.
+            $0.contains("publish-update.sh") || $0.contains("git push")
+                || ($0.contains("gh release") && !$0.contains("gh release list"))
                 || $0.contains("ref: gh-pages")
         }
         #expect(publishing.count >= 3, "expected the release, checkout and push steps, found \(publishing.count)")
