@@ -52,7 +52,7 @@ through a shared `prune-builds.yml`. See `docs/release.md`, `docs/release-spec.m
 
 ## Static checks
 
-SwiftLint runs on every PR (new findings only, against a baseline; part of `ci-ok`), Dependabot
+SwiftLint runs on every PR (`--strict`, no baseline: any finding fails; part of `ci-ok`), Dependabot
 opens weekly update PRs for Actions, npm and Swift packages, and a CodeQL workflow exists but is
 disabled until it supports Xcode 27 (issue #34). See `docs/static-checks-spec.md`.
 

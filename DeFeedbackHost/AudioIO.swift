@@ -27,18 +27,16 @@ final class AudioIO {
     var isRunning: Bool { dfh_io_is_running(handle) }
 
     func start(engine: CoreAudioEngineControl,
-               inputDeviceID: AudioDeviceID,
-               inputChannelCount: Int,
-               outputDeviceID: AudioDeviceID,
-               outputChannelCount: Int,
+               input: AudioDeviceDetails,
+               output: AudioDeviceDetails,
                sampleRate: Double,
                maximumFrameCount: Int) throws {
         var status = dfh_io_start(handle,
                                   engine.engineHandle,
-                                  inputDeviceID,
-                                  Int32(inputChannelCount),
-                                  outputDeviceID,
-                                  Int32(outputChannelCount),
+                                  input.deviceID,
+                                  Int32(input.channelCount),
+                                  output.deviceID,
+                                  Int32(output.channelCount),
                                   sampleRate,
                                   Int32(maximumFrameCount))
 

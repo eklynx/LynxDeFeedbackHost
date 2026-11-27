@@ -443,3 +443,20 @@ Every workflow that needs a Mac now takes the same optional `runner` input on a 
 - **Try it with `dry_run` first.** The publish job reads the signing, notary and Sparkle secrets from the `release` environment and creates a temporary keychain; I did not check that those steps clean up on a machine that keeps its state between runs.
 - A job aimed at an offline runner waits in the queue (the job's `timeout-minutes` doesn't count queue time), so only pass the self-hosted label when the Mac is up.
 - Not done, on purpose: automatically choosing the runner depending on whether the Mac is online. That is still being decided.
+
+# Lint cleanup: AudioIO.start and the end of the baseline (issue #41)
+
+## What I changed
+- New `AudioDeviceDetails` (device ID + channel count for one end of the audio path), made only through `init(inputOf:)` or `init(outputOf:)`. `AudioIO.start` now takes `(engine:input:output:sampleRate:maximumFrameCount:)`: 5 parameters instead of 7. Its one caller is `EngineSession.startIO`. The values handed to `dfh_io_start` are the same, in the same order.
+- Deleted `.swiftlint.baseline.json`. CI runs `swiftlint lint --strict` with no `--baseline`; `StaticChecksTests` S1/S4, `docs/static-checks-spec.md`, `docs/ci.md` and the `.swiftlint.yml` header say so. The spec's "Paying down the baseline" section became "Keeping it clean".
+
+## How I kept behaviour the same
+- The risky mistake is swapping the input and output channel counts, which compiles. `AudioDeviceDetailsTests` pin each initialiser on a device whose two counts differ.
+- `swiftlint lint --strict` with no baseline reports zero findings; full `DeFeedbackHostTests` is green and a Release build succeeds.
+
+## Things to know
+- `AudioIO.start` itself can't be unit-tested (it opens real devices). It is covered by the hands-on checklist on the pull request.
+- The richer per-direction type discussed (sample rates, buffer range, names) is deliberately not part of this.
+
+## Status
+SwiftLint baseline: 0 entries, file removed. Issue #41's "finished when" is met once this merges; closing it is left to the maintainer.
