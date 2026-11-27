@@ -12,6 +12,7 @@ import os
 struct DeFeedbackHostApp: App {
 
     static let aboutWindowID = "about"
+    static let settingsWindowID = "settings"
 
     /// The delegate owns the host and web services (and the launch policy); scenes just borrow them.
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -31,6 +32,9 @@ struct DeFeedbackHostApp: App {
                 AboutCommand()
                 CheckForUpdatesCommand(updates: appDelegate.updates)
             }
+            CommandGroup(replacing: .appSettings) {
+                SettingsCommand()
+            }
         }
 
         Window("About \(AppInfo.name)", id: Self.aboutWindowID) {
@@ -40,20 +44,13 @@ struct DeFeedbackHostApp: App {
         .restorationBehavior(.disabled)
         .commandsRemoved()
 
-        Settings {
-            TabView {
-                Tab("General", systemImage: "gearshape") {
-                    GeneralSettingsView(host: host)
-                }
-                Tab("Web Control", systemImage: "network") {
-                    ServerSettingsView(host: host, web: web)
-                }
-                Tab("StreamDeck", systemImage: "square.grid.3x2") {
-                    StreamDeckSettingsView()
-                }
-            }
+        Window("Settings", id: Self.settingsWindowID) {
+            SettingsView(host: host, web: web)
             .environment(appDelegate.updates)
             .environment(appDelegate.permissions)
         }
+        // Fixed width, height resizable between the tabs' limits (see SettingsTabFrame.swift).
+        .windowResizability(.contentSize)
+        .defaultSize(width: SettingsWindowLayout.width, height: SettingsWindowLayout.maxContentHeight)
     }
 }

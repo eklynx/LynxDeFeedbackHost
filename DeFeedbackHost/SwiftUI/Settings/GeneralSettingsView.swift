@@ -90,10 +90,7 @@ struct GeneralSettingsView: View {
             UpdateSettingsSection()
         }
         .formStyle(.grouped)
-        .frame(width: 440)
-        // Size to the full content height so the Settings window fits it without scrolling.
-        .scrollDisabled(true)
-        .fixedSize(horizontal: false, vertical: true)
+        .settingsTabFrame()
         // The user can change Login Items in System Settings at any time, and the app isn't told,
         // so re-read the status whenever the settings show up or the app comes back to the front.
         .task {
