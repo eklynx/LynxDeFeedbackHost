@@ -152,10 +152,8 @@ final class EngineSession {
         let io = try AudioIO()
         self.io = io
         try io.start(engine: controller,
-                     inputDeviceID: input.id,
-                     inputChannelCount: input.inputChannelCount,
-                     outputDeviceID: output.id,
-                     outputChannelCount: output.outputChannelCount,
+                     input: AudioDeviceDetails(inputOf: input),
+                     output: AudioDeviceDetails(outputOf: output),
                      sampleRate: sampleRate,
                      maximumFrameCount: maximumFrameCount)
     }

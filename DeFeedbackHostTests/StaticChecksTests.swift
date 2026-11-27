@@ -45,10 +45,11 @@ struct StaticChecksTests {
 
     // MARK: SwiftLint (S1–S4)
 
-    @Test("S1: CI lints with --strict against the baseline")
-    func lintsAgainstBaseline() throws {
+    @Test("S1: CI lints with --strict and no baseline")
+    func lintsStrictlyWithoutABaseline() throws {
         let job = block(active(try read(".github/workflows/ci.yml")), from: "  swiftlint:")
-        #expect(job.contains("swiftlint lint --strict --baseline .swiftlint.baseline.json"))
+        #expect(job.contains("swiftlint lint --strict"))
+        #expect(!job.contains("--baseline"))
     }
 
     @Test("S2: the SwiftLint release is pinned and its download verified")
@@ -67,14 +68,15 @@ struct StaticChecksTests {
         #expect(gate.contains("needs: ["))
     }
 
-    @Test("S4: the config skips generated code and tests, and the baseline is a JSON list")
-    func configAndBaseline() throws {
+    @Test("S4: the config skips generated code and tests, and there is no baseline file")
+    func configAndNoBaseline() throws {
         let config = try read(".swiftlint.yml")
         for path in ["build", "streamdeck", "DeFeedbackHostTests", "DeFeedbackHostUITests"] {
             #expect(config.contains("  - \(path)"), "\(path) must be excluded")
         }
-        let data = try Data(contentsOf: repoRoot.appending(path: ".swiftlint.baseline.json"))
-        #expect(try JSONSerialization.jsonObject(with: data) is [Any])
+        #expect(!FileManager.default.fileExists(
+            atPath: repoRoot.appending(path: ".swiftlint.baseline.json").path),
+                "findings are fixed, not baselined")
     }
 
     // MARK: CodeQL (S5, S6)

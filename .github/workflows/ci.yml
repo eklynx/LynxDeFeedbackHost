@@ -116,8 +116,7 @@ jobs:
           name: archive-log
           path: ${{ runner.temp }}/archive.log
 
-  # Style check. Existing findings are recorded in .swiftlint.baseline.json, so only NEW ones fail;
-  # pay the baseline down over time. SwiftLint is pinned to one release (checksum verified) so a new
+  # Style check: any finding fails. SwiftLint is pinned to one release (checksum verified) so a new
   # SwiftLint can't turn CI red on its own. See docs/static-checks-spec.md (S1-S4).
   swiftlint:
     name: SwiftLint
@@ -138,7 +137,7 @@ jobs:
           chmod +x "$RUNNER_TEMP/swiftlint/swiftlint"
           echo "$RUNNER_TEMP/swiftlint" >> "$GITHUB_PATH"
       - name: Lint
-        run: swiftlint lint --strict --baseline .swiftlint.baseline.json --reporter github-actions-logging
+        run: swiftlint lint --strict --reporter github-actions-logging
 
   # The one check to require in branch protection: it fails if any job above failed, was
   # cancelled or was skipped, so adding jobs later only means adding them to `needs`.

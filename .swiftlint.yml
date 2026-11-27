@@ -1,5 +1,5 @@
-# Conservative starting point. Existing violations live in .swiftlint.baseline.json
-# (passed via --baseline) so CI only fails on new ones; pay the baseline down over time.
+# Conservative starting point with no baseline: CI runs `swiftlint lint --strict`, so any finding
+# fails. See docs/static-checks-spec.md.
 excluded:
   - build
   - streamdeck
