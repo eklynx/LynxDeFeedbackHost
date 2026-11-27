@@ -18,7 +18,13 @@
 //
 //  Happy path
 //    1. Plugin not installed, or Stream Deck not installed -> `.notInstalled`; no warning, no update.
-//    2. Installed version equals or is newer than the packaged one -> `.current`; no warning.
+//    2. Installed version equals the packaged one            -> `.current`; no warning.
+//    2a. Installed is NEWER than the packaged one            -> `.newerThanPackaged`; one WARNING, id
+//                                                              `streamDeckPlugin.newerThanPackaged`, telling the
+//                                                              user to press Install/Update in Settings ›
+//                                                              StreamDeck. It happens when a nightly (which has
+//                                                              the lower X.Y.Z) follows a pre-release. Never
+//                                                              replaced automatically (no automatic downgrade).
 //    3. Installed is older than the packaged one            -> `.outOfDate`; one WARNING,
 //                                                              id `streamDeckPlugin.outOfDate`.
 //    4. Installed is older than `minimumCompatibleVersion`   -> `.incompatible`; one ERROR,
@@ -84,16 +90,18 @@ nonisolated enum StreamDeckPluginStatus: Equatable, Sendable {
     case notInstalled
     case current(installed: PluginVersion)
     case outOfDate(installed: PluginVersion, packaged: PluginVersion)
+    case newerThanPackaged(installed: PluginVersion, packaged: PluginVersion)
     case incompatible(installed: PluginVersion, packaged: PluginVersion?)
 
     /// The lowest installed plugin version that still works with this app (edge case 9).
     static let minimumCompatibleVersion = PluginVersion("0.1.0.0")!
 
-    /// Decides the status from the two versions (happy path 1 to 4, edge cases 6 and 7).
+    /// Decides the status from the two versions (happy path 1 to 4 and 2a, edge cases 6 and 7).
     static func decide(installed: PluginVersion?, packaged: PluginVersion?) -> StreamDeckPluginStatus {
         guard let installed else { return .notInstalled }
         if installed < minimumCompatibleVersion { return .incompatible(installed: installed, packaged: packaged) }
         if let packaged, installed < packaged { return .outOfDate(installed: installed, packaged: packaged) }
+        if let packaged, installed > packaged { return .newerThanPackaged(installed: installed, packaged: packaged) }
         return .current(installed: installed)
     }
 }

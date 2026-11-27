@@ -11,8 +11,8 @@
 #   VERSION_LABEL      prerelease only: the label, lowercase letters (default beta).
 #   VERSION_TIMESTAMP  UTC build time, yyyyMMddHHmmss. Default: now. Set it to make runs repeatable.
 #   VERSION_SHA        short commit hash. Default: `git rev-parse --short=7 HEAD`.
-#   VERSION_COMMIT_COUNT  digits; the number of commits, the last part of plugin_version. Default:
-#                      `git rev-list --count HEAD`.
+#   PLUGIN_LEDGER      path of the ledger of plugin versions already shipped (lines `<plugin hash> <version>`).
+#                      Default: none, so every plugin is new. See plugin_version.
 #
 # Output, one key=value per line (and appended to $GITHUB_OUTPUT with --github-output):
 #   marketing_version  plain X.Y.Z. Apple's CFBundleShortVersionString can't hold a suffix.
@@ -24,9 +24,11 @@
 #                      every workflow, and a timestamp does.
 #   tag                vX.Y.Z for a release, nightly-<full_version> for a nightly,
 #                      v<full_version> (e.g. v0.2.0-beta.1) for a prerelease.
-#   plugin_version     X.Y.Z.<commit count>, the version stamped into the Stream Deck plugin's manifest
-#                      (scripts/stamp-plugin-version.sh). Four numbers because the manifest wants them; the
-#                      commit count makes it rise on every build, even nightlies that share an X.Y.Z.
+#   plugin_version     the version stamped into the Stream Deck plugin's manifest (scripts/stamp-plugin-version.sh).
+#                      If the ledger already has the plugin's hash (plugin_hash), that version: the plugin
+#                      didn't change, so it keeps its version. Otherwise X.Y.Z.N, N one more than the highest
+#                      4th number the ledger has for this X.Y.Z (0 if none).
+#   plugin_hash        scripts/plugin-hash.sh: the plugin's code, ignoring its manifest version number.
 #   channel            release | nightly | prerelease (the update channel the build goes to).
 #   base_tag           the tag this version was derived from; empty when there was none.
 #
@@ -50,7 +52,7 @@ GITHUB_OUTPUT_FLAG=NO
 while [ $# -gt 0 ]; do
     case "$1" in
         --github-output) GITHUB_OUTPUT_FLAG=YES; shift ;;
-        -h|--help) sed -n '2,44p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,46p' "$0"; exit 0 ;;
         *) die "unknown option: $1" ;;
     esac
 done
@@ -70,12 +72,6 @@ case "${STAMP}" in ''|*[!0-9]*) die "VERSION_TIMESTAMP must be digits only (got 
 
 git rev-parse --git-dir >/dev/null 2>&1 || die "not inside a git repository"
 SHA="${VERSION_SHA:-$(git rev-parse --short=7 HEAD)}"
-
-if [ -z "${VERSION_COMMIT_COUNT:-}" ] && [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
-    die "a shallow clone can't count commits for the plugin version; fetch the full history (actions/checkout with fetch-depth: 0)"
-fi
-COMMIT_COUNT="${VERSION_COMMIT_COUNT:-$(git rev-list --count HEAD)}"
-case "${COMMIT_COUNT}" in ''|*[!0-9]*) die "VERSION_COMMIT_COUNT must be digits only (got '${COMMIT_COUNT}')" ;; esac
 
 TAGS="$(git tag --list | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' || true)"
 
@@ -124,6 +120,22 @@ else
     TAG="v${MARKETING}"
 fi
 
+# The plugin's version: reuse the one the ledger has for this exact plugin code, else the next for this X.Y.Z.
+PLUGIN_HASH="$(sh "$(dirname "$0")/plugin-hash.sh")"
+PLUGIN_VERSION=""
+LEDGER="${PLUGIN_LEDGER:-}"
+if [ -n "${LEDGER}" ] && [ -f "${LEDGER}" ]; then
+    PLUGIN_VERSION="$(awk -v h="${PLUGIN_HASH}" '$1 == h { print $2; exit }' "${LEDGER}")"
+    case "${PLUGIN_VERSION}" in ''|*[!0-9.]*) PLUGIN_VERSION="" ;; esac
+fi
+if [ -z "${PLUGIN_VERSION}" ]; then
+    NEXT=0
+    if [ -n "${LEDGER}" ] && [ -f "${LEDGER}" ]; then
+        NEXT="$(awk -v p="${MARKETING}." 'index($2, p) == 1 { n = substr($2, length(p) + 1); if (n ~ /^[0-9]+$/ && n + 1 > top) top = n + 1 } END { print top + 0 }' "${LEDGER}")"
+    fi
+    PLUGIN_VERSION="${MARKETING}.${NEXT}"
+fi
+
 emit() {
     echo "$1=$2"
     if [ "${GITHUB_OUTPUT_FLAG}" = "YES" ]; then
@@ -135,7 +147,8 @@ emit() {
 emit marketing_version "${MARKETING}"
 emit full_version "${FULL}"
 emit build_number "${STAMP}"
-emit plugin_version "${MARKETING}.${COMMIT_COUNT}"
+emit plugin_version "${PLUGIN_VERSION}"
+emit plugin_hash "${PLUGIN_HASH}"
 emit tag "${TAG}"
 emit channel "${KIND}"
 emit base_tag "${BASE_TAG}"

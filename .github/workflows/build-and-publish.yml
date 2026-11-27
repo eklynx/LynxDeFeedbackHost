@@ -103,13 +103,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The ledger of plugin versions already shipped (hash, version), kept on gh-pages. A plugin whose code is
+      # already in it keeps its version; a missing file just means no history yet (issue #64, V17 to V19).
+      - name: Read the plugin version ledger
+        run: |
+          git show origin/gh-pages:plugin-versions.txt > "$RUNNER_TEMP/plugin-versions.txt" 2>/dev/null \
+            || : > "$RUNNER_TEMP/plugin-versions.txt"
+
       - name: Compute the version
         id: version
         env:
           VERSION_KIND: ${{ inputs.kind }}
           VERSION_BUMP: ${{ inputs.bump }}
           VERSION_LABEL: ${{ inputs.label }}
-        run: sh scripts/compute-version.sh --github-output
+        run: PLUGIN_LEDGER="$RUNNER_TEMP/plugin-versions.txt" sh scripts/compute-version.sh --github-output
 
       - name: Build the Stream Deck plugin tools
         run: |
@@ -219,11 +226,16 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.full_version }}
           KIND: ${{ inputs.kind }}
+          PLUGIN_HASH: ${{ steps.version.outputs.plugin_hash }}
+          PLUGIN_VERSION: ${{ steps.version.outputs.plugin_version }}
         run: |
           cd site
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add appcast.xml
+          # Record the plugin version this build shipped (once per plugin code), so later builds can reuse it.
+          touch plugin-versions.txt
+          grep -q "^$PLUGIN_HASH " plugin-versions.txt || echo "$PLUGIN_HASH $PLUGIN_VERSION" >> plugin-versions.txt
+          git add appcast.xml plugin-versions.txt
           git commit -m "Add $KIND $VERSION to the appcast"
           for attempt in 1 2 3; do
             git pull --rebase origin gh-pages && git push origin HEAD:gh-pages && exit 0

@@ -11,6 +11,7 @@ import Observation
 final class StreamDeckPluginService: WarningSource {
 
     static let outOfDateID = "streamDeckPlugin.outOfDate"
+    static let newerThanPackagedID = "streamDeckPlugin.newerThanPackaged"
     static let incompatibleID = "streamDeckPlugin.incompatible"
 
     private(set) var status: StreamDeckPluginStatus = .unknown
@@ -59,7 +60,7 @@ final class StreamDeckPluginService: WarningSource {
         switch status {
         case .outOfDate: true
         case .incompatible(_, let packaged): packaged != nil
-        case .unknown, .notInstalled, .current: false
+        case .unknown, .notInstalled, .current, .newerThanPackaged: false
         }
     }
 
@@ -86,6 +87,9 @@ final class StreamDeckPluginService: WarningSource {
         case let .outOfDate(installed, packaged):
             return [AppWarning(id: Self.outOfDateID, kind: .streamDeckPlugin,
                         message: "The Stream Deck plugin is out of date (installed \(installed), this app has \(packaged)). \(failure) Update it in Settings › StreamDeck.")]
+        case let .newerThanPackaged(installed, packaged):
+            return [AppWarning(id: Self.newerThanPackagedID, kind: .streamDeckPlugin,
+                        message: "The installed Stream Deck plugin (\(installed)) is newer than the one in this app (\(packaged)). Press Install/Update Stream Deck Plugin in Settings › StreamDeck to match this app.")]
         case let .incompatible(installed, _):
             return [AppWarning(id: Self.incompatibleID, kind: .streamDeckPlugin, severity: .error,
                         message: "The installed Stream Deck plugin (\(installed)) doesn't work with this version of \(AppInfo.name).\(failure) Update it in Settings › StreamDeck.")]
@@ -95,7 +99,7 @@ final class StreamDeckPluginService: WarningSource {
     /// The version of the plugin Stream Deck has installed, if known (for the settings tab).
     var installedVersion: PluginVersion? {
         switch status {
-        case let .current(installed), let .outOfDate(installed, _), let .incompatible(installed, _): installed
+        case let .current(installed), let .outOfDate(installed, _), let .newerThanPackaged(installed, _), let .incompatible(installed, _): installed
         case .unknown, .notInstalled: nil
         }
     }

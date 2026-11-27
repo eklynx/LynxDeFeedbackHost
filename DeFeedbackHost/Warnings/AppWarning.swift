@@ -26,7 +26,7 @@
 //                                     Settings, so System Settings shortcuts live in the native UI.
 //    6. Ids in use                 -> `update`, `permission.microphone`, `permission.localNetwork`,
 //                                     `permission.loginItems`, `permission.automation`,
-//                                     `streamDeckPlugin.outOfDate`, `streamDeckPlugin.incompatible`.
+//                                     `streamDeckPlugin.outOfDate`, `streamDeckPlugin.newerThanPackaged`, `streamDeckPlugin.incompatible`.
 //    7. `severity`                 -> `warning` (the default) is something to fix when convenient;
 //                                     `error` is something that is broken now (an installed Stream Deck
 //                                     plugin that can't work with this app). Clients that don't know
