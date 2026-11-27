@@ -24,6 +24,10 @@ on:
         description: 'Build, sign and notarize, but publish nothing (no tag, Release or appcast). The DMG is attached to the run.'
         type: boolean
         default: false
+      runner:
+        description: 'Runner as JSON, e.g. "xcode-27" or ["self-hosted","macOS","ARM64"]. Empty uses the RUNNER_LABEL variable, then xcode-27.'
+        type: string
+        default: ''
     outputs:
       tag:
         description: The tag of the build
@@ -38,7 +42,7 @@ permissions:
 jobs:
   guard-and-test:
     name: Guard and unit tests
-    runs-on: ${{ fromJSON(vars.RUNNER_LABEL || '"xcode-27"') }}
+    runs-on: ${{ fromJSON(inputs.runner || vars.RUNNER_LABEL || '"xcode-27"') }}
     timeout-minutes: 30
     steps:
       - name: Only from main
@@ -83,7 +87,7 @@ jobs:
   publish:
     name: Build, notarize and publish
     needs: guard-and-test
-    runs-on: ${{ fromJSON(vars.RUNNER_LABEL || '"xcode-27"') }}
+    runs-on: ${{ fromJSON(inputs.runner || vars.RUNNER_LABEL || '"xcode-27"') }}
     timeout-minutes: 60
     # The signing and notary secrets live in this environment, which is limited to main.
     environment: release

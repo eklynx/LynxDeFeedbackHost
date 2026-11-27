@@ -35,6 +35,14 @@ Actions › Variables:
 
 A manual run (Actions › CI › Run workflow) can override the runner and include the UI tests.
 
+Every workflow that needs a Mac takes the same optional `runner` input on a manual run (CI, CodeQL,
+Release, Pre-release, Nightly, cert-expiry). It is JSON, for example `"xcode-27"` or
+`["self-hosted","macOS","ARM64"]`. Precedence: the `runner` input, then the `RUNNER_LABEL` variable,
+then the hosted default (`xcode-27`; `macos-latest` for cert-expiry). Scheduled, push and
+pull-request runs have no input, so they keep using the variable or the default. Try a new runner
+with `dry_run` on first: the release jobs read signing and notary secrets from the `release`
+environment.
+
 ## Releases, pre-releases and nightlies
 
 All three call one shared build (`build-and-publish.yml`): `release.yml` (manual), `prerelease.yml`

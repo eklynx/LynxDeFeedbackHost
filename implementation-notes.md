@@ -429,3 +429,17 @@ Host/
 
 ## Status
 Baseline: 1 entry left, `AudioIO.start` (7 parameters). When that is fixed, delete `.swiftlint.baseline.json`, drop `--baseline` from CI, and close #41.
+
+# Runner choice on every Mac workflow (issue #3)
+
+## What I changed
+Every workflow that needs a Mac now takes the same optional `runner` input on a manual run: `release.yml`, `prerelease.yml`, `nightly.yml` and `cert-expiry.yml` gained it (`ci.yml` and `codeql.yml` already had it). `build-and-publish.yml`, which the three release workflows call, takes it as a `workflow_call` input and uses it for both its jobs. The rule is the same everywhere: `inputs.runner`, then the `RUNNER_LABEL` variable, then the hosted default (`xcode-27`, or `macos-latest` for cert-expiry). `docs/ci.md` describes it.
+
+## Behaviour
+- The input is JSON, e.g. `["self-hosted","macOS","ARM64"]` for the registered runner EKVM, and defaults to empty, so a run that doesn't pass it behaves exactly as before. Scheduled, push and pull-request runs have no input at all.
+- The Linux jobs (nightly's decide, prune, cert-expiry's issue job) stay on `ubuntu-24.04`.
+
+## Things to know
+- **Try it with `dry_run` first.** The publish job reads the signing, notary and Sparkle secrets from the `release` environment and creates a temporary keychain; I did not check that those steps clean up on a machine that keeps its state between runs.
+- A job aimed at an offline runner waits in the queue (the job's `timeout-minutes` doesn't count queue time), so only pass the self-hosted label when the Mac is up.
+- Not done, on purpose: automatically choosing the runner depending on whether the Mac is online. That is still being decided.

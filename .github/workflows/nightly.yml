@@ -22,6 +22,10 @@ on:
         description: 'How many nightlies to keep'
         type: string
         default: "7"
+      runner:
+        description: 'Runner override as JSON, e.g. "xcode-27" or ["self-hosted","macOS","ARM64"]. Empty uses the RUNNER_LABEL variable, then xcode-27.'
+        required: false
+        default: ''
 
 # One build at a time: nightlies and releases share the group (both push gh-pages).
 concurrency:
@@ -68,6 +72,7 @@ jobs:
     with:
       kind: nightly
       dry_run: ${{ inputs.dry_run || false }}
+      runner: ${{ inputs.runner || '' }}
 
   prune:
     name: Keep only the newest nightlies

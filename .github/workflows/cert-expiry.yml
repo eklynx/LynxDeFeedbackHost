@@ -15,13 +15,17 @@ on:
         description: Open an issue when this many days or fewer are left
         type: string
         default: "15"
+      runner:
+        description: 'Runner override as JSON, e.g. "xcode-27" or ["self-hosted","macOS","ARM64"]. Empty uses the RUNNER_LABEL variable, then macos-latest.'
+        required: false
+        default: ''
 
 permissions: {}
 
 jobs:
   check:
     name: Read the certificate expiry
-    runs-on: ${{ fromJSON(vars.RUNNER_LABEL || '"macos-latest"') }}
+    runs-on: ${{ fromJSON(inputs.runner || vars.RUNNER_LABEL || '"macos-latest"') }}
     timeout-minutes: 10
     environment: release
     permissions:
