@@ -24,8 +24,11 @@ export const shutdownSequence = new ShutdownSequence({
     },
     // SH22: the phrase is the shutdown action's global setting, read when the sequence succeeds.
     getPhrase: async () => (await streamDeck.settings.getGlobalSettings<GlobalSettings>()).shutdownPhrase,
+    // Keys the Stream Deck app no longer shows are never magic keys, even if a will-disappear was missed.
+    isShowing: (id) => streamDeck.actions.getActionById(id) !== undefined,
     random: Math.random,
     scheduler: {setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: (h) => clearTimeout(h as NodeJS.Timeout)},
+    debug: (message) => streamDeck.logger.debug(message),
     log: (message, error) => error === undefined ? streamDeck.logger.info(message) : streamDeck.logger.error(message, error),
 });
 

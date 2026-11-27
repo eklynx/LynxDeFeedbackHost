@@ -19,7 +19,7 @@ globalThis.__sd = {
             getGlobalSettings: async () => JSON.parse(JSON.stringify(store)),
             setGlobalSettings: async (s) => { setGlobalCalls++; store = JSON.parse(JSON.stringify(s)); },
         },
-        actions: {forEach: () => {}},
+        actions: {forEach: () => {}, getActionById: () => ({})},
     },
 };
 
@@ -31,22 +31,24 @@ const {ShutdownSequence, KeyRegistry, clampMagicPresses, FLASH_MS} = m;
 const ENABLED = {enabled: true, testMode: false, phrase: "shutdown now"};
 
 // ---- pure harness: sequence + registry + recording view + scripted sender -----------------------------------------
-function harness({keys = ["m1", "b1", "s1"], status = ENABLED, phrase = "typed phrase", send, random = Math.random, shutdownKeys = ["sd"]} = {}) {
+function harness({keys = ["m1", "b1", "s1"], status = ENABLED, phrase = "typed phrase", send, random = Math.random, shutdownKeys = ["sd"], devices = {}, isShowing} = {}) {
     const registry = new KeyRegistry();
     const kinds = ["mute", "bypass", "strength"];
-    keys.forEach((id, i) => registry.appear(id, kinds[i % 3]));
-    shutdownKeys.forEach((id) => registry.appear(id, "shutdown"));
-    const shown = [], magics = [], sent = [];
-    const view = {showShutdownState: (s) => shown.push(s), showMagicKey: (id) => magics.push(id)};
+    keys.forEach((id, i) => registry.appear(id, kinds[i % 3], undefined, devices[id]));
+    shutdownKeys.forEach((id) => registry.appear(id, "shutdown", undefined, devices[id]));
+    const shown = [], shownOn = [], magics = [], sent = [], debug = [];
+    const view = {showShutdownState: (s, id) => { shown.push(s); shownOn.push([id, s]); }, showMagicKey: (id) => magics.push(id)};
     const seq = new ShutdownSequence({
         registry, view,
         send: send ?? (async (p) => { sent.push(p); return {test: false}; }),
         getPhrase: () => phrase,
         random,
+        isShowing,
+        debug: (m) => debug.push(m),
         scheduler: {setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: (h) => clearTimeout(h)},
     });
     seq.setStatus(status ?? undefined);
-    return {seq, registry, shown, magics, sent, view};
+    return {seq, registry, shown, shownOn, magics, sent, debug, view};
 }
 const tap = (seq, id) => { const a = seq.keyDown(id); const b = seq.keyUp(id); return a && b; };
 const lastShown = (h) => h.shown.at(-1);
@@ -163,6 +165,72 @@ test("xIsClamped: X defaults to 5 and is never below 5", async () => {
     tap(h.seq, h.seq.magicKeyId);
     await drain();
     assert.equal(h.sent.length, 1);
+    mock.timers.tick(FLASH_MS);
+});
+
+// ---- SH23 -------------------------------------------------------------------------------------------------------
+test("magicKeysStayOnTheHoldersDevice: every magic key is on the same Stream Deck as the held shutdown key", () => {
+    const devices = {m1: "A", b1: "A", s1: "B", m2: "B", b2: "B", sd: "A"};
+    for (const rng of [() => 0, () => 0.999999, lcg(3), lcg(42)]) {
+        const h = harness({keys: ["m1", "b1", "s1", "m2", "b2"], devices, random: rng});
+        h.seq.shutdownKeyDown("sd", 30);
+        assert.equal(h.seq.isActive, true);
+        let current = h.seq.magicKeyId;
+        for (let i = 0; i < 29; i++) {
+            assert.ok(["m1", "b1"].includes(current), `magic key ${current} must be on device A`);
+            tap(h.seq, current);
+            current = h.seq.magicKeyId;
+        }
+        h.seq.shutdownKeyUp("sd");
+        mock.timers.tick(FLASH_MS);
+    }
+});
+
+test("tooFewKeysIsPerDevice: keys on another device do not count towards the minimum", () => {
+    // device A has the held shutdown key and ONE eligible key; device B has three eligible keys and its own shutdown key.
+    const devices = {m1: "A", b1: "B", s1: "B", m2: "B", sd: "A", sd2: "B"};
+    const h = harness({keys: ["m1", "b1", "s1", "m2"], shutdownKeys: ["sd", "sd2"], devices});
+    h.registry.appear("x", "shutdown", undefined, "A");   // a repaint after any change
+    h.registry.disappear("x");
+    const stateOf = (id) => h.shownOn.filter(([k]) => k === id).at(-1)?.[1];
+    assert.equal(stateOf("sd"), "tooFewKeys", "device A has only one eligible key");
+    assert.equal(stateOf("sd2"), "normal", "device B has three");
+    h.seq.shutdownKeyDown("sd", 5);
+    assert.equal(h.seq.isActive, false, "holding on device A does nothing");
+    h.seq.shutdownKeyDown("sd2", 5);
+    assert.equal(h.seq.isActive, true);
+    assert.ok(["b1", "s1", "m2"].includes(h.seq.magicKeyId), "device B's attempt uses device B's keys");
+    h.seq.shutdownKeyUp("sd2");
+    mock.timers.tick(FLASH_MS);
+});
+
+test("keysNotShowingAreNeverMagic: a key the Stream Deck no longer shows is skipped even if it is still registered", () => {
+    const hidden = new Set(["b1"]);
+    const h = harness({keys: ["m1", "b1", "s1"], isShowing: (id) => !hidden.has(id), random: lcg(5)});
+    h.seq.shutdownKeyDown("sd", 20);
+    let current = h.seq.magicKeyId;
+    for (let i = 0; i < 19; i++) {
+        assert.notEqual(current, "b1");
+        tap(h.seq, current);
+        current = h.seq.magicKeyId;
+    }
+    h.seq.shutdownKeyUp("sd");
+    mock.timers.tick(FLASH_MS);
+    // with only one showing key left, the hold does nothing
+    hidden.add("s1");
+    h.registry.appear("tmp", "shutdown"); h.registry.disappear("tmp");
+    h.seq.shutdownKeyDown("sd", 5);
+    assert.equal(h.seq.isActive, false);
+});
+
+test("magicPicksAreLogged: each pick writes one debug line naming the key, the device and how many keys were eligible", () => {
+    const h = harness({keys: ["m1", "b1"], devices: {m1: "A", b1: "A", sd: "A"}, random: lcg(2)});
+    h.seq.shutdownKeyDown("sd", 5);
+    tap(h.seq, h.seq.magicKeyId);
+    assert.equal(h.debug.length, 2);
+    assert.match(h.debug[0], /Shutdown magic key (m1|b1) \(tap 1 of 5\); holder sd on device A; 2 eligible key\(s\) there/);
+    assert.match(h.debug[1], /tap 2 of 5/);
+    h.seq.shutdownKeyUp("sd");
     mock.timers.tick(FLASH_MS);
 });
 
@@ -330,7 +398,7 @@ test("resultFlashThenReset: every outcome flashes on the shutdown key, then ever
 function fakeAction(id, manifestId, settings, {key = true} = {}) {
     return {
         id, manifestId, images: [], titles: [],
-        isKey: () => key, isDial: () => !key,
+        isKey: () => key, isDial: () => !key, device: {id: "deck-1"},
         setImage(img) { this.images.push(img); return Promise.resolve(); },
         setTitle(t) { this.titles.push(t); return Promise.resolve(); },
         setFeedback() { return Promise.resolve(); }, setFeedbackLayout() { return Promise.resolve(); },

@@ -59,7 +59,7 @@ export class Strength extends SingletonAction<StrengthSettings> {
 
 	override async onWillAppear(ev: WillAppearEvent<StrengthSettings>) {
 		// Only KEYS can be a magic key of a shutdown attempt; dials are never registered.
-		if (ev.action.isKey()) keyRegistry.appear(ev.action.id, "strength", ev.action as KeyAction<JsonObject>);
+		if (ev.action.isKey()) keyRegistry.appear(ev.action.id, "strength", ev.action as KeyAction<JsonObject>, ev.action.device.id);
 		actionSettings.set(ev.action.id, ev.payload.settings);
 		// Always a full draw: the screen may have been reset (page or profile switch).
 		const globalSettings: GlobalSettings = await streamDeck.settings.getGlobalSettings();

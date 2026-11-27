@@ -29,7 +29,7 @@ export class Shutdown extends SingletonAction<ShutdownSettings> {
 	override async onWillAppear(ev: WillAppearEvent<ShutdownSettings>): Promise<void> {
 		// Know the host's shutdown status before the first draw, so the key does not flash grey on every page change.
 		applyGlobalSettings(await streamDeck.settings.getGlobalSettings<GlobalSettings>());
-		keyRegistry.appear(ev.action.id, "shutdown", ev.action as KeyAction<JsonObject>);
+		keyRegistry.appear(ev.action.id, "shutdown", ev.action as KeyAction<JsonObject>, ev.action.device.id);
 	}
 
 	override onWillDisappear(ev: WillDisappearEvent<ShutdownSettings>): void {

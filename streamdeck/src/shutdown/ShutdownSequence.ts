@@ -1,13 +1,14 @@
 /**
  * SOURCE OF TRUTH (for AI agents): the Stream Deck shutdown "puzzle" (hold the shutdown key, tap the red magic key X times).
- * Rules: docs/shutdown-spec.md, SH14-SH22. API: openapi.yaml (`POST /api/shutdown`, status `shutdown`).
+ * Rules: docs/shutdown-spec.md, SH14-SH23. API: openapi.yaml (`POST /api/shutdown`, status `shutdown`).
  *
  * Pure and injectable: it imports nothing from the Stream Deck SDK. Everything it touches is passed in
  * (`ShutdownSequenceDeps`): the key registry, the view, the sender, the phrase source, a random source and a scheduler.
  *
  * Happy path
- *   1. `shutdownKeyDown(id, x)` while enabled and >= 2 eligible keys are visible: an attempt starts, one eligible key
- *      becomes the magic key (`view.showMagicKey(id)`).
+ *   1. `shutdownKeyDown(id, x)` while enabled and >= 2 eligible keys are visible on the SAME Stream Deck as the held
+ *      shutdown key: an attempt starts, one of those keys becomes the magic key (`view.showMagicKey(id)`). Keys on
+ *      another device are never magic keys and do not count towards the minimum (SH23).
  *   2. The caller routes every key press/release of our mute/bypass/strength keys to `keyDown` / `keyUp`. A tap
  *      (down+up) on the magic key counts; the next magic key is random and different from the current one.
  *   3. After `x` taps the attempt ends and the phrase is sent; a 202 flashes "success" (or "test" when the host
@@ -35,8 +36,8 @@ export type ShutdownKeyState = "normal" | "disabled" | "tooFewKeys" | "success" 
 export type ShutdownStatusInfo = { enabled: boolean; testMode: boolean; phrase: string };
 
 export interface ShutdownView {
-    /** Draw the state on every visible shutdown key. */
-    showShutdownState(state: ShutdownKeyState): void;
+    /** Draw the state on the shutdown key `id`, or on every visible shutdown key when no id is given. */
+    showShutdownState(state: ShutdownKeyState, id?: string): void;
     /** Paint `id` full red and restore whichever key was red before; null restores all. */
     showMagicKey(id: string | null): void;
 }
@@ -56,8 +57,12 @@ export type ShutdownSequenceDeps = {
     /** [0, 1) like Math.random. */
     random: () => number;
     scheduler: Scheduler;
+    /** Whether the Stream Deck app still shows this action; keys that are not showing are never magic keys. Default: yes. */
+    isShowing?: (id: string) => boolean;
     flashMs?: number;
     log?: (message: string, error?: unknown) => void;
+    /** Debug-level trace (one line per magic key pick). */
+    debug?: (message: string) => void;
 };
 
 /** X from the action settings: default 5, never below 5, whole numbers only (SH16). */
@@ -93,11 +98,17 @@ export class ShutdownSequence {
     get magicKeyId(): string | undefined { return this.magic; }
     get tapCount(): number { return this.taps; }
 
-    /** The state the shutdown key should show now. */
-    state(): ShutdownKeyState {
+    /** Eligible magic keys for the shutdown key `holderId` (same device, showing); with no id: every device. */
+    private eligibleFor(holderId?: string): string[] {
+        const ids = holderId === undefined ? this.d.registry.eligibleIds() : this.d.registry.eligibleIdsOnDeviceOf(holderId);
+        return this.d.isShowing ? ids.filter((id) => this.d.isShowing!(id)) : ids;
+    }
+
+    /** The state the shutdown key `id` should show now (without an id, as if every device were one). */
+    state(id?: string): ShutdownKeyState {
         if (this.flashState) return this.flashState;
         if (!this.status?.enabled) return "disabled";
-        if (this.d.registry.eligibleIds().length < MIN_ELIGIBLE_KEYS) return "tooFewKeys";
+        if (this.eligibleFor(id).length < MIN_ELIGIBLE_KEYS) return "tooFewKeys";
         return "normal";
     }
 
@@ -109,7 +120,9 @@ export class ShutdownSequence {
     }
 
     render(): void {
-        this.d.view.showShutdownState(this.state());
+        const ids = this.d.registry.shutdownIds();
+        if (ids.length === 0) this.d.view.showShutdownState(this.state());
+        for (const id of ids) this.d.view.showShutdownState(this.state(id), id);
     }
 
     // ---- the shutdown key -----------------------------------------------------------------------------------
@@ -122,7 +135,7 @@ export class ShutdownSequence {
             return;
         }
         if (this.busy) return;
-        const s = this.state();
+        const s = this.state(id);
         if (s === "disabled" || s === "tooFewKeys") return;   // holds do nothing (SH19, SH20)
 
         this.clearFlash();
@@ -132,6 +145,7 @@ export class ShutdownSequence {
         this.taps = 0;
         this.magicPressed = false;
         this.magic = this.pickMagic(undefined);
+        this.logPick();
         this.render();
         this.d.view.showMagicKey(this.magic ?? null);
     }
@@ -163,6 +177,7 @@ export class ShutdownSequence {
                 void this.succeed();
             } else {
                 this.magic = this.pickMagic(this.magic);
+                this.logPick();
                 this.d.view.showMagicKey(this.magic ?? null);
             }
         }
@@ -171,12 +186,18 @@ export class ShutdownSequence {
 
     // ---- internals ------------------------------------------------------------------------------------------
 
-    /** Random eligible key, never `current` (SH15). */
+    /** Random eligible key on the holder's device, never `current` (SH15, SH23). */
     private pickMagic(current: string | undefined): string | undefined {
-        const candidates = this.d.registry.eligibleIds().filter((id) => id !== current);
+        const candidates = this.eligibleFor(this.holder).filter((id) => id !== current);
         if (candidates.length === 0) return undefined;
         const i = Math.min(candidates.length - 1, Math.floor(this.d.random() * candidates.length));
         return candidates[i];
+    }
+
+    /** One debug line per pick, so a sequence with no next key can be diagnosed from the plugin log. */
+    private logPick(): void {
+        const eligible = this.eligibleFor(this.holder);
+        this.d.debug?.(`Shutdown magic key ${this.magic ?? "none"} (tap ${this.taps + 1} of ${this.required}); holder ${this.holder} on device ${this.d.registry.deviceOf(this.holder ?? "") ?? "unknown"}; ${eligible.length} eligible key(s) there`);
     }
 
     private onRegistryChanged(): void {

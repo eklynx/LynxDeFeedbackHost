@@ -52,14 +52,15 @@ is hard to undo, so every path has a safety mechanism:
 | Id | Rule | Test |
 |----|------|------|
 | SH14 | The shutdown action is key-only. Holding it starts an attempt; releasing it before success ends the attempt with nothing sent. | `sequenceReleaseFails` |
-| SH15 | While held, one other key action of ours on the current screen is the magic key (red). Tapping it (press and release) while still holding the shutdown key makes the plugin pick the next magic key at random, different from the current one; keys may be re-used across the sequence. | `sequenceAdvances`, `sequenceNeverRepeatsCurrent` |
+| SH15 | While held, one other key action of ours on the same Stream Deck as the held key (SH23) is the magic key (red). Tapping it (press and release) while still holding the shutdown key makes the plugin pick the next magic key at random, different from the current one; keys may be re-used across the sequence. | `sequenceAdvances`, `sequenceNeverRepeatsCurrent` |
 | SH16 | After X magic taps in a row the attempt succeeds and the plugin sends the shutdown command with the phrase. X is a setting of the shutdown action, default 5, clamped to at least 5. | `sequenceSucceedsAfterX`, `xIsClamped` |
 | SH17 | Pressing any other key of ours fails the attempt. Keys that are not ours and dials are ignored. A screen or folder change while held fails the attempt. There is no time limit. | `sequenceWrongKeyFails`, `sequenceIgnoresForeignInput`, `sequencePageChangeFails` |
 | SH18 | A magic tap does not run that key's normal action. | `magicTapSuppressesAction` |
-| SH19 | With fewer than 2 eligible key actions on the screen, the shutdown key shows a large orange X and holds do nothing. | `tooFewKeysShowsX` |
+| SH19 | With fewer than 2 eligible key actions on the same Stream Deck as the shutdown key (SH23), that shutdown key shows a large orange X and holds do nothing. | `tooFewKeysShowsX` |
 | SH20 | When shutdown is disabled the key is grey and ignores holds. | `disabledKeyIgnoresHold` |
 | SH21 | Success, failure and test results flash a checkmark or alert on the shutdown key, then every key returns to normal. A rejected phrase (empty, or different from the app's) shows the alert. A failed attempt may be restarted by holding again. | `resultFlashThenReset` |
 | SH22 | The phrase the plugin sends is the shutdown action's global setting, typed in by the user. | `phraseComesFromGlobalSetting` |
+| SH23 | Magic keys are only mute, bypass or strength KEY actions (never the shutdown key, never dials) that are on the **same Stream Deck device** as the shutdown key being held, and that the Stream Deck app still shows. Keys on another device are never magic and do not count towards the minimum in SH19; each shutdown key is judged on its own device. Each magic key pick writes one debug-level log line (key, tap number, holder, device, number of eligible keys), and the plugin runs at debug log level, so a sequence that stops advancing can be diagnosed from the plugin log. | `magicKeysStayOnTheHoldersDevice`, `tooFewKeysIsPerDevice`, `keysNotShowingAreNeverMagic`, `magicPicksAreLogged` |
 
 ## Manual checklist (real shutdown, not automatable)
 

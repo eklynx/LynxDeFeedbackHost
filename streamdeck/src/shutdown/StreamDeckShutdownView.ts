@@ -43,9 +43,9 @@ export class StreamDeckShutdownView implements ShutdownView {
 
     constructor(private readonly registry: KeyRegistry<KeyAction<JsonObject>>) {}
 
-    showShutdownState(state: ShutdownKeyState): void {
+    showShutdownState(state: ShutdownKeyState, only?: string): void {
         const image = shutdownImage(state);
-        for (const id of this.registry.shutdownIds()) {
+        for (const id of only === undefined ? this.registry.shutdownIds() : [only]) {
             const action = this.registry.handleOf(id);
             if (!action) continue;
             action.setImage(image).catch((e) => streamDeck.logger.error("Failed to draw shutdown key", e));

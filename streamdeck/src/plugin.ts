@@ -10,7 +10,7 @@ import {getConnector, setConnector} from "./connectorState";
 import {CURRENT_VERSION, GlobalSettings} from "./GlobalSettings";
 
 // We can enable "trace" logging so that all messages between the Stream Deck, and the plugin are recorded. When storing sensitive information
-streamDeck.logger.setLevel("info");
+streamDeck.logger.setLevel("debug");   // debug level on: the shutdown puzzle logs each magic key pick (#29)
 
 // Register the increment action.
 streamDeck.actions.registerAction(new Mute());

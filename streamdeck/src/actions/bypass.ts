@@ -53,7 +53,7 @@ export class Bypass extends SingletonAction<BypassSettings> {
 		return await Bypass.updateActionFromEvent(ev, globalSettings);
 	}
 	override async onWillAppear(ev: WillAppearEvent<BypassSettings>): Promise<void> {
-		keyRegistry.appear(ev.action.id, "bypass", ev.action as KeyAction<JsonObject>);
+		keyRegistry.appear(ev.action.id, "bypass", ev.action as KeyAction<JsonObject>, ev.action.device.id);
 		const globalSettings: GlobalSettings = await streamDeck.settings.getGlobalSettings();
 		return await Bypass.updateActionFromEvent(ev, globalSettings);
 	}

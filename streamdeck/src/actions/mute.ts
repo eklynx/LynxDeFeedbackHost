@@ -52,7 +52,7 @@ export class Mute extends SingletonAction<MuteSettings> {
 		return await this.updateActionFromEvent(ev, globalSettings);
 	}
 	override async onWillAppear(ev: WillAppearEvent<MuteSettings>): Promise<void> {
-		keyRegistry.appear(ev.action.id, "mute", ev.action as KeyAction<JsonObject>);
+		keyRegistry.appear(ev.action.id, "mute", ev.action as KeyAction<JsonObject>, ev.action.device.id);
 		const globalSettings: GlobalSettings = await streamDeck.settings.getGlobalSettings();
 		return await this.updateActionFromEvent(ev, globalSettings);
 	}
