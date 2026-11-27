@@ -16,6 +16,7 @@ enum AudioHostError: LocalizedError {
     case sampleRateUnavailable(String)
     case sampleRateMismatch(input: Double, output: Double)
     case sampleRateNotApplied(String, Double)
+    case bufferTooSmallForSampleRate(bufferSize: Int)
     case bufferSizeNotApplied(String, requested: Int, actual: Int?)
     case maxInstancesReached
     case coreAudio(String, OSStatus)
@@ -47,6 +48,8 @@ enum AudioHostError: LocalizedError {
                 input,
                 output
             )
+        case .bufferTooSmallForSampleRate(let bufferSize):
+            return PluginConfiguration.highSampleRateBufferMessage(bufferSize: bufferSize)
         case .sampleRateNotApplied(let name, let rate):
             return String(
                 format: String(localized: locKeyErrSampleRateNotAppliedFormat,

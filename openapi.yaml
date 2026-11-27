@@ -274,7 +274,10 @@ paths:
         "409":
           description: |
             The host cannot start. The message is `blockedReason` — the same sentence the app's own
-            window shows — or, if starting was attempted and failed, the host's error.
+            window shows — or, if starting was attempted and failed, the host's error. One reason
+            to expect: at a sample rate of 96 kHz or higher the buffer must be at least 64 samples,
+            so a smaller `bufferSize` blocks the start (the settings themselves are still accepted
+            while stopped, so they can be changed in either order).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }

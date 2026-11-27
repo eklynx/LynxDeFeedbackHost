@@ -12,14 +12,16 @@ import SwiftUI
 
 enum PluginInstanceError: LocalizedError {
     case componentNotFound
-    case formatRejected
+    case formatRejected(sampleRate: Double, bufferSize: Int)
 
     var errorDescription: String? {
         switch self {
         case .componentNotFound:
             return "Couldn't find the configured AU Component. Check the Plugin Configuration."
-        case .formatRejected:
-            return "The AU Component rejected both mono and stereo buses at the specified sample rate."
+        case .formatRejected(let sampleRate, let bufferSize):
+            return "The AU Component couldn't be set up at \(Int(sampleRate)) Hz with a \(bufferSize)-sample buffer "
+                + "(it rejected both mono and stereo buses, or failed to initialise). "
+                + "Try a larger buffer or a lower sample rate."
         }
     }
 }
@@ -314,7 +316,10 @@ final class PluginInstance: Identifiable {
         let channels: Int? = unit.withAudioUnit { handle in
             engine.installUnit(handle, into: slot)
         }
-        guard let channels else { throw PluginInstanceError.formatRejected }
+        guard let channels else {
+            throw PluginInstanceError.formatRejected(sampleRate: engine.sampleRate,
+                                                     bufferSize: engine.maximumFrameCount)
+        }
 
         busChannelCount = channels
         self.slot = slot
