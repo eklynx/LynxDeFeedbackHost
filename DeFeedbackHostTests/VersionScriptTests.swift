@@ -408,3 +408,67 @@ struct PluginVersionOutputTests {
                   to: "streamdeck/com.example.sdPlugin/manifest.json", in: repo)
     }
 }
+
+/// Where the changelog of a build starts: docs/versioning-spec.md V21 and V22.
+struct NotesStartTagTests {
+
+    private func repo(tags: [String]) throws -> URL {
+        let dir = try makeRepo(tags: [])
+        // One commit per tag, in the given order, so tag dates differ and rise.
+        for (index, tag) in tags.enumerated() {
+            try git(["commit", "-q", "--allow-empty", "-m", "c\(index)", "--date", "2026-01-\(10 + index)T00:00:00"], in: dir)
+            try git(["tag", tag], in: dir)
+        }
+        return dir
+    }
+
+    private func released(_ tags: [String]) throws -> URL {
+        let file = FileManager.default.temporaryDirectory.appending(path: "released-\(UUID().uuidString).txt")
+        try (tags.joined(separator: "\n") + "\n").write(to: file, atomically: true, encoding: .utf8)
+        return file
+    }
+
+    private func start(_ repo: URL, kind: String, released: URL? = nil) throws -> String? {
+        var extra: [String: String] = [:]
+        if let released { extra["RELEASED_TAGS"] = released.path }
+        let run = try compute(in: repo, kind: kind, bump: "minor", extra: extra)
+        #expect(run.status == 0, "\(run.error)")
+        return run.values["notes_start_tag"]
+    }
+
+    @Test("V21: a nightly starts at the newest nightly tag by timestamp; a pre-release at the newest pre-release of any label")
+    func sameKindIsPrevious() throws {
+        let dir = try repo(tags: ["v0.1.2", "nightly-0.1.3-20261125030000.aaaaaaa", "v0.2.0-beta.1",
+                                  "nightly-0.1.3-20261126030000.bbbbbbb", "v0.2.0-rc.1", "nightly-0.1.3-20261124030000.ccccccc"])
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let list = try released(["v0.1.2"])
+        defer { try? FileManager.default.removeItem(at: list) }
+        #expect(try start(dir, kind: "nightly", released: list) == "nightly-0.1.3-20261126030000.bbbbbbb")
+        #expect(try start(dir, kind: "prerelease", released: list) == "v0.2.0-rc.1")
+    }
+
+    @Test("V21: a release starts at the latest published release, so a marker tag without a Release doesn't count")
+    func releaseSkipsTagsWithoutARelease() throws {
+        let dir = try repo(tags: ["0.1.2", "v0.2.0", "v0.3.0-beta.1"])
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let list = try released(["0.1.0", "0.1.2", "v0.3.0-beta.1"])
+        defer { try? FileManager.default.removeItem(at: list) }
+        #expect(try start(dir, kind: "release", released: list) == "0.1.2")
+        // Without the list the latest tag is used (the marker included).
+        #expect(try start(dir, kind: "release") == "v0.2.0")
+    }
+
+    @Test("V22: with no earlier build of the kind the changelog starts at the latest release; with no release at all it is empty")
+    func fallbacks() throws {
+        let dir = try repo(tags: ["0.1.2", "v0.2.0"])
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let list = try released(["0.1.2"])
+        defer { try? FileManager.default.removeItem(at: list) }
+        #expect(try start(dir, kind: "nightly", released: list) == "0.1.2")
+        #expect(try start(dir, kind: "prerelease", released: list) == "0.1.2")
+
+        let bare = try repo(tags: [])
+        defer { try? FileManager.default.removeItem(at: bare) }
+        #expect(try start(bare, kind: "nightly") == "")
+    }
+}

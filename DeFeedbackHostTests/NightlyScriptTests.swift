@@ -301,6 +301,11 @@ struct NightlyScriptTests {
     }
 
     private func releaseCreateCall(channel: String, notes: String?) throws -> String {
+        try ghCalls(channel: channel, notes: notes).first { $0.hasPrefix("release create") } ?? ""
+    }
+
+    /// Every `gh` call a publish makes. `changes` is what the stub's generate-notes API answers (nothing = it fails).
+    private func ghCalls(channel: String, notes: String?, changes: String? = nil, startTag: String? = nil) throws -> [String] {
         let dir = try scratch()
         defer { try? FileManager.default.removeItem(at: dir) }
         let bin = dir.appending(path: "bin")
@@ -312,19 +317,47 @@ struct NightlyScriptTests {
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
         }
         try stub("sign_update", "echo FAKESIGNATURE==")
-        try stub("gh", "echo \"$@\" >> \"\(calls.path)\"\n[ \"$2\" = view ] && exit 1\nexit 0")
+        let changesFile = dir.appending(path: "changes.txt")
+        try (changes ?? "").write(to: changesFile, atomically: true, encoding: .utf8)
+        // Calls are logged on one line each (a multi-line notes body would otherwise split across lines).
+        let apiAnswer = changes == nil ? "[ \"$1\" = api ] && exit 1\n" : "[ \"$1\" = api ] && { cat \"\(changesFile.path)\"; exit 0; }\n"
+        try stub("gh", "echo \"$@\" | tr '\\n' ' ' >> \"\(calls.path)\"\necho >> \"\(calls.path)\"\n\(apiAnswer)[ \"$2\" = view ] && exit 1\nexit 0")
         let dmg = dir.appending(path: "App.dmg")
         try Data("dmg".utf8).write(to: dmg)
         var env = ["SPARKLE_BIN": bin.path, "SPARKLE_ED_PRIVATE_KEY": "unused",
                    "PATH": "\(bin.path):/usr/bin:/bin:/usr/sbin:/sbin"]
         if let notes { env["RELEASE_NOTES"] = notes }
+        if let startTag { env["NOTES_START_TAG"] = startTag }
         let result = try run("/bin/sh", [repoRoot.appending(path: "scripts/publish-update.sh").path, "--dmg", dmg.path,
                                          "--version", "0.2.1-20261125030000.ab12cd3", "--build", "20261125030000",
                                          "--channel", channel, "--site-dir", dir.appending(path: "site").path, "--upload"],
                              environment: env)
         #expect(result.status == 0, "\(result.all)")
         let all = (try? String(contentsOf: calls, encoding: .utf8)) ?? ""
-        return all.split(separator: "\n").first { $0.hasPrefix("release create") }.map(String.init) ?? ""
+        return all.split(separator: "\n").map(String.init)
+    }
+
+    @Test("V20: the release body lists the changes since the previous build of the kind, under the fixed note if there is one")
+    func changelogSinceThePreviousBuild() throws {
+        let calls = try ghCalls(channel: "nightly", notes: "Automatic nightly build. Not a release.",
+                                changes: "## What's Changed\n* a change", startTag: "nightly-0.2.0-20261124030000.aaaaaaa")
+        let api = try #require(calls.first { $0.hasPrefix("api ") }, "\(calls)")
+        #expect(api.contains("releases/generate-notes") && api.contains("tag_name=nightly-0.2.1-20261125030000.ab12cd3"), "\(api)")
+        #expect(api.contains("previous_tag_name=nightly-0.2.0-20261124030000.aaaaaaa"), "\(api)")
+        let create = try #require(calls.first { $0.hasPrefix("release create") })
+        #expect(create.contains("Automatic nightly build. Not a release."))
+        #expect(create.contains("What's Changed") && !create.contains("--generate-notes"), "\(create)")
+    }
+
+    @Test("V20: without a start tag GitHub picks the previous tag; if the changelog can't be made the release still publishes")
+    func changelogFallbacks() throws {
+        let noStart = try ghCalls(channel: "release", notes: nil, changes: "## What's Changed\n* x")
+        #expect(!(noStart.first { $0.hasPrefix("api ") } ?? "").contains("previous_tag_name"))
+
+        let failed = try ghCalls(channel: "release", notes: nil, startTag: "v0.1.0")
+        #expect((failed.first { $0.hasPrefix("release create") } ?? "").contains("--generate-notes"), "\(failed)")
+        let failedNightly = try ghCalls(channel: "nightly", notes: "Not a release.", startTag: "nightly-0.2.0-1.a")
+        #expect((failedNightly.first { $0.hasPrefix("release create") } ?? "").contains("--notes Not a release."), "\(failedNightly)")
     }
 
     @Test("N5: a nightly release is a pre-release with the fixed note; a release still gets generated notes")

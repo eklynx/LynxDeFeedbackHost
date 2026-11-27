@@ -614,3 +614,14 @@ Built in parallel against the Phase 0 contract (#31 system, #30 API, #32 web pag
 - **Removed:** `VERSION_COMMIT_COUNT` and the shallow-clone failure that only the commit count needed (tags still fail on a shallow clone).
 - **Bug caught by the tests:** an awk variable named `next` (a reserved word) broke the ledger lookup; renamed.
 - **Not verified:** the workflow's gh-pages ledger read and append ran nowhere; the first real pre-release or nightly after merge is its test. The first build stamps `X.Y.Z.0` (empty ledger), which can be lower than a plugin already installed from the old scheme; the new warning covers it.
+
+## Changelog since the previous build of the same kind (#3)
+
+- **Problem:** GitHub's `--generate-notes` compares with whatever tag it considers previous, so the `v0.3.0-beta.1` page compared against a nightly; nightlies had no changelog at all.
+- **Approach:** `compute-version.sh` outputs `notes_start_tag` (nightly: newest nightly tag; pre-release: newest pre-release tag of any label; release: latest published release). `publish-update.sh` asks the generate-notes API for exactly that range and builds the body itself, with the fixed nightly sentence on top. One path for all three kinds; no reliance on how `gh` combines `--notes` with `--generate-notes`.
+- **Decisions not in the request (defaults I chose; the clarifying questions were declined):** nightlies keep the "Not a release." sentence and get the list under it; with no earlier build of the kind the list starts at the latest release, else GitHub's default.
+- **Marker tag:** `v0.2.0` has no Release, so a release's start tag comes from `gh release list` (`RELEASED_TAGS`), not from the latest tag; otherwise the first release would omit everything up to that marker. Without the list the latest `vX.Y.Z` tag is used.
+- **A failed changelog never fails a build:** the API call's failure logs a warning and the release is created with the fixed text or GitHub's own notes.
+- **Bugs caught by my tests:** an apostrophe in a test stub's `printf '...'` broke the shell script; a multi-line notes body split the stub's call log across lines.
+- **Pruned nightlies:** the start tag is the newest nightly that still exists, so pruning older ones doesn't matter (the newest is always kept).
+- **Not verified:** the real generate-notes API call and `gh release list` ran nowhere; the next nightly or pre-release is their test. The page's "Full Changelog" link should name the previous build of the same kind.

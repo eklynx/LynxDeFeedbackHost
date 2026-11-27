@@ -11,6 +11,9 @@
 #   VERSION_LABEL      prerelease only: the label, lowercase letters (default beta).
 #   VERSION_TIMESTAMP  UTC build time, yyyyMMddHHmmss. Default: now. Set it to make runs repeatable.
 #   VERSION_SHA        short commit hash. Default: `git rev-parse --short=7 HEAD`.
+#   RELEASED_TAGS      path of a file listing the tags that have a published GitHub Release, one per line (CI writes it
+#                      from `gh release list`). Used for notes_start_tag: a bare marker tag without a Release (v0.2.0)
+#                      is then not taken for a release. Default: none, so the latest vX.Y.Z tag counts.
 #   PLUGIN_LEDGER      path of the ledger of plugin versions already shipped (lines `<plugin hash> <version>`).
 #                      Default: none, so every plugin is new. See plugin_version.
 #
@@ -29,6 +32,10 @@
 #                      didn't change, so it keeps its version. Otherwise X.Y.Z.N, N one more than the highest
 #                      4th number the ledger has for this X.Y.Z (0 if none).
 #   plugin_hash        scripts/plugin-hash.sh: the plugin's code, ignoring its manifest version number.
+#   notes_start_tag    where this build's changelog starts: the previous build of the same kind (nightly: the newest
+#                      nightly tag; prerelease: the newest pre-release tag of any label; release: the latest published
+#                      release). With no earlier build of the kind, the latest published release; empty if none, and
+#                      GitHub then picks. Never the build's own tag.
 #   channel            release | nightly | prerelease (the update channel the build goes to).
 #   base_tag           the tag this version was derived from; empty when there was none.
 #
@@ -52,7 +59,7 @@ GITHUB_OUTPUT_FLAG=NO
 while [ $# -gt 0 ]; do
     case "$1" in
         --github-output) GITHUB_OUTPUT_FLAG=YES; shift ;;
-        -h|--help) sed -n '2,46p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,53p' "$0"; exit 0 ;;
         *) die "unknown option: $1" ;;
     esac
 done
@@ -136,6 +143,30 @@ if [ -z "${PLUGIN_VERSION}" ]; then
     PLUGIN_VERSION="${MARKETING}.${NEXT}"
 fi
 
+# Where the changelog starts (see notes_start_tag above).
+latest_release_tag() {
+    if [ -n "${RELEASED_TAGS:-}" ] && [ -f "${RELEASED_TAGS}" ]; then
+        grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' "${RELEASED_TAGS}" | grep -vx "${TAG}" \
+            | sed 's/^v//' | sort -t. -k1,1nr -k2,2nr -k3,3nr | head -n 1 \
+            | while read -r found; do
+                if grep -qx "v${found}" "${RELEASED_TAGS}"; then echo "v${found}"; else echo "${found}"; fi
+              done
+    else
+        printf '%s' "${BASE_TAG}"
+    fi
+}
+case "${KIND}" in
+    nightly)
+        NOTES_START="$(git tag --list 'nightly-*' | grep -vx "${TAG}" \
+            | sed -n 's/^nightly-[0-9.]*-\([0-9]*\)\..*$/\1 &/p' | sort -rn | head -n 1 | cut -d' ' -f2)" ;;
+    prerelease)
+        NOTES_START="$(git tag --list --sort=-version:refname --sort=-creatordate \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-[a-z]+\.[0-9]+$' | grep -vx "${TAG}" | head -n 1)" ;;
+    *)
+        NOTES_START="$(latest_release_tag)" ;;
+esac
+[ -n "${NOTES_START}" ] || NOTES_START="$(latest_release_tag)"
+
 emit() {
     echo "$1=$2"
     if [ "${GITHUB_OUTPUT_FLAG}" = "YES" ]; then
@@ -150,5 +181,6 @@ emit build_number "${STAMP}"
 emit plugin_version "${PLUGIN_VERSION}"
 emit plugin_hash "${PLUGIN_HASH}"
 emit tag "${TAG}"
+emit notes_start_tag "${NOTES_START}"
 emit channel "${KIND}"
 emit base_tag "${BASE_TAG}"

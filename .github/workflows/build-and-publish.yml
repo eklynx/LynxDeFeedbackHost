@@ -110,13 +110,20 @@ jobs:
           git show origin/gh-pages:plugin-versions.txt > "$RUNNER_TEMP/plugin-versions.txt" 2>/dev/null \
             || : > "$RUNNER_TEMP/plugin-versions.txt"
 
+      # The tags that have a published Release: the changelog of a release starts at the latest of them, so a bare
+      # marker tag (v0.2.0) isn't taken for one. If the call fails the list is empty and the latest tag is used.
+      - name: List the published releases
+        run: |
+          gh release list --limit 200 --json tagName,isDraft --jq '.[] | select(.isDraft | not) | .tagName' \
+            > "$RUNNER_TEMP/released-tags.txt" || : > "$RUNNER_TEMP/released-tags.txt"
+
       - name: Compute the version
         id: version
         env:
           VERSION_KIND: ${{ inputs.kind }}
           VERSION_BUMP: ${{ inputs.bump }}
           VERSION_LABEL: ${{ inputs.label }}
-        run: PLUGIN_LEDGER="$RUNNER_TEMP/plugin-versions.txt" sh scripts/compute-version.sh --github-output
+        run: PLUGIN_LEDGER="$RUNNER_TEMP/plugin-versions.txt" RELEASED_TAGS="$RUNNER_TEMP/released-tags.txt" sh scripts/compute-version.sh --github-output
 
       - name: Build the Stream Deck plugin tools
         run: |
@@ -211,6 +218,7 @@ jobs:
           KIND: ${{ inputs.kind }}
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
           RELEASE_TARGET: ${{ github.sha }}
+          NOTES_START_TAG: ${{ steps.version.outputs.notes_start_tag }}
         run: |
           export SPARKLE_BIN="$RUNNER_TEMP/derived/SourcePackages/artifacts/sparkle/Sparkle/bin"
           # A nightly is a GitHub pre-release with a fixed note; a release gets generated notes.
