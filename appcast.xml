@@ -3,6 +3,17 @@
   <channel>
     <title>Lynx DeFeedback Host</title>
     <item>
+      <title>Version 0.2.1-20261128113429.b823f73</title>
+      <pubDate>Sat, 28 Nov 2026 11:37:00 GMT</pubDate>
+      <link>https://github.com/eklynx/LynxDeFeedbackHost/releases/tag/nightly-0.2.1-20261128113429.b823f73</link>
+      <sparkle:channel>nightly</sparkle:channel>
+      <sparkle:version>20261128113429</sparkle:version>
+      <sparkle:shortVersionString>0.2.1-20261128113429.b823f73</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>27.0</sparkle:minimumSystemVersion>
+      <sparkle:releaseNotesLink>https://github.com/eklynx/LynxDeFeedbackHost/releases/tag/nightly-0.2.1-20261128113429.b823f73</sparkle:releaseNotesLink>
+      <enclosure url="https://github.com/eklynx/LynxDeFeedbackHost/releases/download/nightly-0.2.1-20261128113429.b823f73/DeFeedbackHost-0.2.1-20261128113429.b823f73.dmg" length="5774154" type="application/octet-stream" sparkle:edSignature="r1rYXuWWaBodcmHXlRUZqYWI4Rgq1hgzvJhTMRiRNdzM2AmqNMoVXgtPt3Rx2wvU1MYXf0oneAL07J6taCoIAQ=="/>
+    </item>
+    <item>
       <title>Version 0.3.0-beta.1</title>
       <pubDate>Fri, 27 Nov 2026 18:12:23 GMT</pubDate>
       <link>https://github.com/eklynx/LynxDeFeedbackHost/releases/tag/v0.3.0-beta.1</link>
